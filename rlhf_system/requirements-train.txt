@@ -1,0 +1,13 @@
+# Training pipeline (Kaggle / Colab with an NVIDIA GPU)
+torch>=2.4
+transformers>=4.46
+trl>=0.12
+peft>=0.13
+accelerate>=1.0
+bitsandbytes>=0.43
+datasets
+sentencepiece
+protobuf
+tiktoken
+pandas
+numpy

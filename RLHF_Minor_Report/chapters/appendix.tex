@@ -1,0 +1,78 @@
+\chapter{Complete Source Code (Configuration A)}
+\label{app:code}
+
+This appendix reproduces every code cell of the executed notebook \texttt{mini-6\_}\allowbreak\texttt{working.ipynb} (configuration A) in order. Non-ASCII symbols used for console decoration in the original notebook (emoji, arrows) have been removed or replaced with ASCII equivalents; the code is otherwise unchanged. Markdown cells are omitted; their content is covered in Chapters~\ref{ch:method} and~\ref{ch:impl}.
+
+\lstinputlisting[style=py, caption={Complete notebook source, configuration A (\texttt{mini-6\_working}).}, label={lst:fullA}, basicstyle=\ttfamily\scriptsize]{code/configA_full.py}
+
+\chapter{Code Changes for Configuration B}
+\label{app:codeB}
+
+Configuration B (\texttt{mini-7-fixed.ipynb}) uses the same code as Appendix~\ref{app:code} except for the cells listed below: the stale-checkpoint cleaner (cell 0), the HH-weighted sampling (cell 13), the larger LoRA rank for the reward model (cell 18), the slower and longer reward-model schedule (cell 20), the 2:1 HH-weighted DPO data (cell 30), and the DPO configuration with MLP adapters, lower learning rate, higher $\beta$ and best-checkpoint reload (cell 31).
+
+\lstinputlisting[style=py, caption={Changed cells, configuration B (\texttt{mini-7-fixed}).}, label={lst:fullB}, basicstyle=\ttfamily\scriptsize]{code/configB_changed.py}
+
+\chapter{Sample Model Outputs}
+\label{app:outputs}
+
+The complete console output of the five-prompt demo reel for both configurations is reproduced below, exactly as printed by the notebooks (decorative symbols removed). Responses are cut at 200 new tokens, which is why some end mid-sentence. The reward scores are those of the configuration's own reward model; scores from different configurations are \emph{not} comparable, because each reward model has its own arbitrary offset.
+
+\section{Configuration A}
+\lstinputlisting[style=py, language={}, numbers=none, caption={Demo-reel output, configuration A.}, label={lst:outA}, basicstyle=\ttfamily\scriptsize, breaklines=true]{code/demo_outputs_A.txt}
+
+\section{Configuration B}
+\lstinputlisting[style=py, language={}, numbers=none, caption={Demo-reel output, configuration B.}, label={lst:outB}, basicstyle=\ttfamily\scriptsize, breaklines=true]{code/demo_outputs_B.txt}
+
+\chapter{Reproduction Guide}
+\label{app:repro}
+
+\section{Requirements}
+\begin{itemize}
+  \item A Kaggle account with phone verification (required for GPU and internet access).
+  \item The LMSYS Chatbot Arena \texttt{train.csv} attached as an input dataset (from the Kaggle competition \emph{LMSYS -- Chatbot Arena Human Preference Predictions}).
+  \item Notebook settings: \emph{Accelerator: GPU T4 $\times$2}, \emph{Internet: On}.
+\end{itemize}
+
+\section{Steps}
+\begin{enumerate}
+  \item Upload the notebook (\texttt{mini-6\_working.ipynb} for configuration A or \texttt{mini-7-fixed.ipynb} for configuration B) to Kaggle and attach \texttt{train.csv}.
+  \item Run the installation cell, then \emph{restart the kernel} once so that the upgraded \texttt{torchao} and \texttt{peft} are imported cleanly.
+  \item Run all cells. The first run downloads HH-RLHF, DeBERTa-v3-base and TinyLlama, trains both models and takes about 2.5--3 hours.
+  \item Use \emph{Save Version $\rightarrow$ Quick Save} so that \texttt{reward\_model/} and \texttt{finetuned\_llm/} are kept as notebook output.
+  \item In later sessions, attach the saved notebook output as an input dataset. The path-resolution cell (Listing~\ref{lst:persist}) finds the adapters automatically and every training stage is skipped.
+  \item Run the interactive cell on its own to compare models on new prompts; type \texttt{quit} to stop.
+\end{enumerate}
+
+\section{Output Artefacts}
+\begin{table}[!htbp]
+\centering
+\caption[Files produced by a complete run]{Files produced by a complete run.}
+\label{tab:artefacts}
+\small
+\begin{tabularx}{\textwidth}{@{}L{5.6cm}Y@{}}
+\toprule
+\textbf{Path (under \texttt{/kaggle/working})} & \textbf{Content}\\
+\midrule
+\texttt{reward\_model/} & LoRA adapter, pooler and classifier weights, tokenizer, \texttt{training\_log.json}\\
+\texttt{finetuned\_llm/} & DPO LoRA adapter, tokenizer, \texttt{training\_log.json}\\
+\texttt{plots/}\allowbreak\texttt{dataset\_composition.png} & Figure~\ref{fig:m6-dataset} / \ref{fig:m7-dataset}\\
+\texttt{plots/}\allowbreak\texttt{rm\_validation\_per\_source.png} & Figure~\ref{fig:m6-rmdist} / \ref{fig:m7-rmdist}\\
+\texttt{plots/}\allowbreak\texttt{rm\_loss\_curve.png} & Figure~\ref{fig:m6-rmloss} / \ref{fig:m7-rmloss}\\
+\texttt{plots/}\allowbreak\texttt{dpo\_curves.png} & Figure~\ref{fig:m6-dpocurves} / \ref{fig:m7-dpocurves}\\
+\texttt{plots/}\allowbreak\texttt{demo\_comparison.png} & Figure~\ref{fig:demo}\\
+\texttt{plots/}\allowbreak\texttt{before\_after\_headline.png} & Figure~\ref{fig:m6-headline} / \ref{fig:m7-headline}\\
+\texttt{demo\_results.csv} & Five-prompt demo reel responses and scores\\
+\texttt{batch\_eval.csv} & 50-prompt held-out evaluation with source labels\\
+\texttt{interactive\_session.csv} & Log of the interactive session\\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\section{Running the Packaged System}
+The folder \texttt{rlhf\_system} contains the system described in Section~\ref{sec:system}.
+\begin{enumerate}
+  \item Create the environment once: \texttt{python3 -m venv .venv} and \texttt{.venv/bin/pip install -r requirements-app.txt} (add \texttt{requirements-train.txt} to train).
+  \item Train on Kaggle: \texttt{python run\_pipeline.py -{}-config A} (or \texttt{B}). Train on an 8\,GB Mac: \texttt{PYTORCH\_MPS\_HIGH\_WATERMARK\_RATIO=0.0 python run\_pipeline.py -{}-config local}.
+  \item Single stages: add \texttt{-{}-stage data}, \texttt{rm}, \texttt{dpo} or \texttt{eval}. Finished stages are skipped automatically.
+  \item Start the web application with \texttt{python app.py} and open \url{http://127.0.0.1:7860}. Adapters placed in \texttt{models/} are used first; otherwise the newest pipeline output is loaded.
+\end{enumerate}

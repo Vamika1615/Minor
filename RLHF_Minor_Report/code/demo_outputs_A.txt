@@ -1,0 +1,133 @@
+ Running 5-prompt demo reel...
+
+
+vvv Demo 1/5 vvv
+==============================================================================
+ PROMPT: What is neural network?
+==============================================================================
+
+ BEFORE TRAINING (Base TinyLlama):
+   Reward Score: -0.6582
+   Response: Neural Networks are a type of artificial intelligence (AI) that involves the use of interconnected neurons, or nodes, to simulate the behavior and functioning of biological nervous systems. Neural networks learn from data by identifying patterns in the input data and using this information to make predictions about new inputs. The process of learning can be represented as a series of "hidden" layers between input and output, where each layer represents a unit or node in the system. These hidden units are connected by weighted connections called synapses, which allow for communication between different layers. By training the network on large amounts of labeled data, neural networks can be trained to perform complex tasks such as image recognition, speech recognition, and language translation.
+
+ AFTER TRAINING (DPO-Aligned TinyLlama):
+   Reward Score: -0.1562
+   Response: Neural networks are a type of artificial intelligence that learn from data by simulating the structure and functioning of biological nervous systems. They consist of multiple layers of neurons, which can be trained to perform complex tasks such as classification, regression, prediction, or reasoning. 
+
+In neural networks, each layer is composed of neurons, which receive input from previous layers and send output to new neurons. The number of neurons in a layer decreases as it goes deeper into the model, until all the inputs are processed by the last layer. The outputs are then sent through an activation function (such as ReLU) to the next layer, where they are again processed and combined with the previous outputs. The process continues until the final layer's output is calculated.
+
+The complexity of the neural network is determined by its architecture: the number of layers, the size of the neuron population, and the number of hidden units per layer. Each layer is called
+
+ WINNER: Fine-tuned model (Delta = +0.5020, ~+76.3%)
+==============================================================================
+
+vvv Demo 2/5 vvv
+==============================================================================
+ PROMPT: Explain neural networks simply.
+==============================================================================
+
+ BEFORE TRAINING (Base TinyLlama):
+   Reward Score: -0.2025
+   Response: Neural networks are a type of artificial intelligence (AI) that is inspired by the human brain. They consist of layers of neurons, which process information and make decisions based on input data. Each layer consists of several neurons connected to each other through synaptic connections. The number of neurons in each layer determines how complex the network can be, as well as how much information it can handle simultaneously. 
+
+In neural networks, the input data is first processed through multiple layers, where each layer transforms the incoming data into a different form or representation. At the output layer, the transformed data is compared with a set of previously learned patterns to determine the correct output value. These patterns are stored in memory for future use.
+
+The structure and activation functions of each layer control how the information flows through the network, allowing it to learn and adapt over time. Activation functions such as ReLU and tanh function to keep the network's weights more compact
+
+ AFTER TRAINING (DPO-Aligned TinyLlama):
+   Reward Score: -0.1578
+   Response: Neural networks are a type of machine learning algorithm that uses a layered structure to simulate the human brain's neural circuitry. The basic principle behind neural networks is to learn and make predictions based on given inputs (or "data"). Here's how it works:
+
+1. Input data: When you feed data into your computer or smartphone, it enters the input layer. This layer is where the first layer of neurons start. 2. Neuron activation: Each neuron in this layer receives a signal from its immediate neighbors (connected neurons). These signals may be positive or negative depending on which one fires first. If two neurons fire at the same time, they will combine their information by adding up the weights between them. This creates an output (or prediction) for the next layer. 3. Neuron update: Next, the output goes through another set of connected neurons called the hidden layer. Each neuron here can receive any
+
+ WINNER: Fine-tuned model (Delta = +0.0447, ~+22.1%)
+==============================================================================
+
+vvv Demo 3/5 vvv
+==============================================================================
+ PROMPT: How do I stay motivated while studying?
+==============================================================================
+
+ BEFORE TRAINING (Base TinyLlama):
+   Reward Score: -0.3147
+   Response: Studying can be a challenging task, especially when you have to study for long hours. Here are some ways that you can stay motivated and enthusiastic about your studies:
+
+1. Break it down into small tasks: Instead of trying to cram everything at once, break your course material into smaller tasks that you can complete in manageable amounts. This will help you feel less overwhelmed and more manageable.
+
+2. Set realistic goals: When setting goals for yourself, try to focus on the results rather than just the time spent studying. For example, if you aim to read 5 books in one week, break it down into shorter chunks throughout the week.
+
+3. Find something interesting or entertaining: If you find studying boring, try finding something else that you enjoy doing. Whether it's watching TV shows or reading books, finding an activity that you enjoy is much more likely to keep you engaged.
+
+ AFTER TRAINING (DPO-Aligned TinyLlama):
+   Reward Score: -0.1413
+   Response: Staying motivated to study is crucial for achieving your academic goals. Here are some tips that can help you stay motivated:
+
+1. Set achievable goals: Break down your study goals into smaller, more manageable tasks. For example, instead of saying "I want to complete my coursework by the end of this term," say "I will work on my essays and assignments for 2 hours per day until they are completed."
+
+2. Make learning enjoyable: Engage in activities or hobbies that make studying fun. This could be reading a book, watching TV shows, or playing games.
+
+3. Find a support system: Seek out people who support you academically. They can provide encouragement, advice, or just listen when you need to vent about your struggles.
+
+4. Keep track of progress: Monitor your progress towards your goals. Use a planner or journal to keep track of what
+
+ WINNER: Fine-tuned model (Delta = +0.1734, ~+55.1%)
+==============================================================================
+
+vvv Demo 4/5 vvv
+==============================================================================
+ PROMPT: I'm feeling anxious about an upcoming exam. Any advice?
+==============================================================================
+
+ BEFORE TRAINING (Base TinyLlama):
+   Reward Score: -0.1434
+   Response: Here are some practical tips for managing anxiety and preparing for a test or exam:
+
+1. Take deep breaths: Focus on your breath, inhaling through your nose for 4-5 seconds and exhaling slowly through your mouth for 6-8 seconds. Repeat this technique several times to help calm your body and mind.
+
+2. Practice relaxation techniques: Experiment with different relaxation techniques such as guided meditation, progressive muscle relaxation, or deep breathing exercises. Find a quiet space where you can focus without distractions.
+
+3. Set realistic goals: Define specific, achievable goals that align with the type of test or exam being taken. Celebrate small victories along the way, rather than focusing solely on achieving the final goal.
+
+4. Create a study schedule: Break down the material into manageable chunks, and set aside
+
+ AFTER TRAINING (DPO-Aligned TinyLlama):
+   Reward Score: -0.1960
+   Response: As a student, you might feel anxious about the upcoming exam or test due to various reasons such as:
+
+1. Fear of failure: You may be afraid that if you do not perform well on the exam, it will impact your overall academic performance and career goals.
+2. Anxiety over specific topics: You may have concerns about memorizing certain concepts or answering questions related to one particular topic.
+3. Overthinking and worrying too much: You may also find yourself obsessively thinking about what could go wrong or how you can make things better in the end.
+4. Tension from previous failures: If you've had some prior negative experiences with exams, this anxiety can build up again.
+5. Unrealistic expectations: You might believe that you should achieve perfection during the exam period, which is unrealistic and ultimately stressful.
+6. Negative self-talk: You might engage
+
+  Base model scored higher this turn (Delta = -0.0525)
+    Note: due to sampling, individual prompts may favor either model;
+    the AVERAGE over many prompts is what shows DPO's effect.
+==============================================================================
+
+vvv Demo 5/5 vvv
+==============================================================================
+ PROMPT: What's a healthy way to handle disagreements with friends?
+==============================================================================
+
+ BEFORE TRAINING (Base TinyLlama):
+   Reward Score: -0.1059
+   Response: Here are some ways to handle disagreements with friends:
+1. Listen and understand: Before you start arguing, try to listen carefully to your friend's perspective and ask questions to clarify any misunderstandings or uncertainties.
+2. Don't take it personally: Avoid taking the disagreement personally and focus on finding common ground instead of trying to prove your point.
+3. Be open-minded: Try to see things from your friend's point of view and avoid assuming that they are wrong or irrational.
+4. Take responsibility for your actions: When you make mistakes, own up to them and apologize when necessary. This shows empathy and helps prevent future conflicts.
+5. Focus on solutions: Instead of focusing solely on what went wrong, try to find solutions together. Look for ways to compromise and find common ground.
+6. Communicate clearly: Use clear language and specific examples
+
+ AFTER TRAINING (DPO-Aligned TinyLlama):
+   Reward Score: -0.1552
+   Response: There are different ways to handle disagreements with friends, but here are some common strategies:
+
+1. Listen and validate: Try to understand your friend's perspective without judgment or criticism. This can help you better communicate what you want to say next. 2. Seek clarification: If it turns out that your friendship is based on shared values or beliefs, try to clarify them for yourself and for your friend. Ask questions until you have a clearer understanding of the situation. 3. Find common ground: Instead of arguing over minor differences in opinion, find a point of agreement that everyone can agree on. For example, if one person wants to spend more time playing video games while another prefers going out dancing, finding a middle ground where they both enjoy similar activities may lead to mutual respect and appreciation. 4. Communicate empathetically: Try to put yourself in your friend's shoes by acknowledging their feelings and
+
+  Base model scored higher this turn (Delta = -0.0493)
+    Note: due to sampling, individual prompts may favor either model;
+    the AVERAGE over many prompts is what shows DPO's effect.
+==============================================================================

@@ -1,0 +1,189 @@
+\chapter{Literature Review}
+\label{ch:lit}
+
+Before writing any code we read the main papers behind each part of our pipeline. This chapter reports what we took from them and why each one mattered for a design decision we made. We group the papers by topic: learning from human comparisons, building reward models, newer alternatives to PPO, fitting large models into small GPUs, and the datasets and evaluation methods that are available. The chapter ends with a summary table and the gaps we chose to work on.
+
+\section{Learning from Human Comparisons}
+\label{sec:lit-rlhf}
+
+\subsection{Where the idea started}
+Christiano \emph{et al.}~\cite{christiano2017deep} wanted to train agents on tasks whose goal is easy to recognise but hard to write as a formula. Their solution was to show people pairs of short video clips of the agent and ask which clip was closer to the goal. A small network was fitted to these choices and then used as the reward for ordinary reinforcement learning. Human input was needed for less than one percent of the agent's steps, yet the agents learned Atari games and simulated movement tasks, including a backflip. For our project the important point is the three-part structure that every later system copies: collect comparisons, fit a scorer to them, then optimise against the scorer.
+
+\subsection{Moving the idea to text}
+Ziegler \emph{et al.}~\cite{ziegler2019finetuning} used the same structure on GPT-2 for text continuation and summarisation. They added a penalty on the KL divergence between the trained model and its starting copy. Without it, the model quickly found strange text that the scorer liked but people did not. The same penalty is built into the DPO objective we use, through the parameter $\beta$. Stiennon \emph{et al.}~\cite{stiennon2020summarize} scaled this up for summarising Reddit posts and news. Their trained summaries beat larger supervised models and even the human reference summaries in human ratings. They also plotted what happens when the policy is pushed too hard: the learned score keeps rising while real human preference first rises and then drops. We saw a small example of this ourselves (Section~\ref{sec:hacking}).
+
+Nakano \emph{et al.}~\cite{nakano2021webgpt} trained a browsing model to answer long questions with references. One of their findings is practical: simply sampling several answers and keeping the one the reward model likes best (best-of-$n$) was a strong competitor to full reinforcement learning.
+
+\subsection{The three-stage recipe}
+Ouyang \emph{et al.}~\cite{ouyang2022instructgpt} put the pieces together for instruction following. They first fine-tuned GPT-3 on answers written by labellers, then trained a reward model on rankings of several outputs, and finally ran PPO against that reward model with a KL penalty and a small amount of pre-training data mixed in. Labellers preferred the resulting 1.3B model to the 175B GPT-3, and the model also produced fewer false and toxic answers. The paper calls the small drop on some academic benchmarks an ``alignment tax''. Our project implements the second and third stages of this recipe; we skip the first because TinyLlama-Chat already has supervised chat training.
+
+\subsection{Helpful and harmless assistants}
+Askell \emph{et al.}~\cite{askell2021general} described the goals of a general assistant as being helpful, honest and harmless, and studied how well preference models trained on comparisons scale. Bai \emph{et al.}~\cite{bai2022hh} followed up by releasing the HH-RLHF data, about 160,000 human comparisons split into a helpfulness part and a harmlessness part, which is one of our two data sources. They report that the two goals pull against each other, that preference-model accuracy grows roughly with the logarithm of model and data size, and that reward and distance from the starting model grow together in a predictable way during training. They also tried collecting fresh comparisons from the latest model at regular intervals (``online'' RLHF).
+
+Glaese \emph{et al.}~\cite{glaese2022sparrow} broke ``good behaviour'' into many specific rules and collected a separate judgement for each rule, which made it easier to see why a response failed. Touvron \emph{et al.}~\cite{touvron2023llama2} trained separate helpfulness and safety reward models for Llama~2-Chat on more than a million comparisons. A detail from their paper helped us interpret our own numbers: their reward models were very accurate on pairs where annotators had a strong preference, but close to coin-flipping on pairs marked as only slightly different. Many pairs in our data are of the second kind.
+
+\subsection{Using models instead of people}
+Bai \emph{et al.}~\cite{bai2022cai} proposed Constitutional AI. The model criticises and rewrites its own answers using a short list of written principles, and an AI preference model replaces human labels for the harmlessness part. Lee \emph{et al.}~\cite{lee2023rlaif} later compared AI-generated and human-generated labels directly and found the resulting models were rated about the same. These results suggest that mixing several sources of preference labels is reasonable, which is the idea our project tests on a small scale.
+
+\section{Reward Models}
+\label{sec:lit-rm}
+
+\subsection{The statistics underneath}
+All of the reward models above use the same statistical model, proposed by Bradley and Terry~\cite{bradley1952rank} for sports-style paired comparisons. Each item has a hidden strength, and item $i$ beats item $j$ with probability $p_i/(p_i+p_j)$. If we write each strength as $e^{r}$, this probability becomes the sigmoid of $r_i - r_j$. A reward model is a neural network that outputs $r$ for a (prompt, response) pair and is trained so that this sigmoid matches the observed choices. Chapter~\ref{ch:method} writes this out in full.
+
+\subsection{When the scorer gets gamed}
+Gao, Schulman and Hilton~\cite{gao2023overoptimization} measured reward hacking in a controlled way. They used a large reward model as a stand-in for ``true'' human preference and trained smaller reward models on its labels. When a policy was optimised against a small reward model, the large model's score first rose and then fell, while the small model's score kept going up. Bigger reward models and more data pushed the turning point further out. Our reward model has only 184M parameters and a few thousand training pairs, so this paper predicts that it will be easy to fool. Our ``2 + 3'' example in Chapter~\ref{ch:results} is exactly that.
+
+\subsection{The length problem}
+Singhal \emph{et al.}~\cite{singhal2023length} found that on several common datasets, a large share of the gains credited to RLHF came from answers simply getting longer, and a reward that counted only length did surprisingly well. Since LMSYS answers in our data are much longer than HH-RLHF answers, we cut every field to the same maximum of 1,500 characters for both sources, so the reward model cannot use length to tell the two sources apart.
+
+\subsection{Testing reward models properly}
+Lambert \emph{et al.}~\cite{lambert2024rewardbench} built RewardBench, a fixed set of prompt / better answer / worse answer triples grouped into chat, difficult chat, safety and reasoning. It scores a reward model by pairwise accuracy, the same measure we use. Their results show that a reward model can look good overall while being near chance on one category. That observation is the reason we report every number separately for each data source. Liu \emph{et al.}~\cite{liu2024skywork} (Skywork-Reward) and Wang \emph{et al.}~\cite{wang2024helpsteer2} (HelpSteer2) both showed that a carefully chosen mix of relatively few, good preference pairs can produce top reward models. This supports our view that \emph{which} data goes into a reward model matters as much as how much.
+
+\subsection{Choosing an encoder}
+Large production systems usually build the reward model from a decoder language model with a single-number output added. For a free GPU we wanted something much smaller. BERT~\cite{devlin2019bert} showed that encoders trained to fill in masked words learn useful representations of whole sentences. DeBERTa~\cite{he2021deberta} improved on this by keeping word content and word position in separate vectors inside attention. DeBERTaV3~\cite{he2023debertav3} switched the training task to spotting replaced words, in the style of ELECTRA, and became one of the strongest encoders of its size. Because every token in an encoder sees the whole input, a 184M-parameter DeBERTaV3 is a natural fit for reading a full prompt and response and giving one score. Our first prototype used TinyLlama as the reward model and we replaced it with DeBERTaV3 for this reason.
+
+\section{Optimising the Policy}
+\label{sec:lit-po}
+
+\subsection{PPO}
+PPO~\cite{schulman2017ppo} is the reinforcement-learning method used by InstructGPT. It limits how far each update can move the policy by clipping a ratio of new to old probabilities. Used for RLHF, it maximises the expected reward of sampled responses minus $\beta$ times the KL divergence from the reference model. In practice this needs four networks on the GPU (policy, reference, reward model and a value network) and new text has to be generated at every step. That was beyond our hardware.
+
+\subsection{DPO}
+Rafailov \emph{et al.}~\cite{rafailov2023dpo} noticed that the best policy for the PPO objective can be written down directly in terms of the reference model and the reward. Turning that equation around expresses the reward using the policy itself. Putting this into the Bradley--Terry formula removes the reward model from training completely, and what remains is a logistic loss on stored preference pairs. In their experiments DPO matched or beat PPO on sentiment control, summarisation and single-turn dialogue, with much less code and tuning. Tunstall \emph{et al.}~\cite{tunstall2023zephyr} then used DPO with AI-labelled UltraFeedback data to train Zephyr-7B, which scored above much larger RLHF chat models on MT-Bench. TinyLlama-Chat, the model we start from, was itself trained with the Zephyr recipe. These results made DPO the obvious choice for us.
+
+\subsection{Variants of DPO}
+Several later methods change the DPO loss:
+\begin{itemize}
+  \item \textbf{IPO}~\cite{azar2024ipo} places RLHF and DPO in one framework and shows that DPO can over-fit when the preference labels are treated as certain. It replaces the logistic loss with a squared one so that the KL term keeps working.
+  \item \textbf{KTO}~\cite{ethayarajh2024kto} learns from single responses marked good or bad, so it does not need pairs at all.
+  \item \textbf{ORPO}~\cite{hong2024orpo} merges supervised fine-tuning and preference learning into one loss and drops the reference model.
+  \item \textbf{SimPO}~\cite{meng2024simpo} uses the average log-probability per token as the reward and adds a target margin, which removes the reference model and reduces the pull towards longer answers.
+\end{itemize}
+We stayed with plain DPO because it is the best-understood option and is supported directly by the TRL library. The others are listed as future work.
+
+\section{Fitting a Billion-Parameter Model on a Free GPU}
+\label{sec:lit-peft}
+
+Fully fine-tuning TinyLlama with the Adam optimiser would need memory for the weights, the gradients and two extra copies for the optimiser, which is far more than the 16\,GB of a T4. Four ideas from the literature made it fit.
+\begin{itemize}
+  \item \textbf{Adapters}~\cite{houlsby2019adapters}: insert a few small trainable layers into a frozen model and train only those. This reached nearly the quality of full fine-tuning while training a few percent of the parameters.
+  \item \textbf{LoRA}~\cite{hu2022lora}: instead of extra layers, learn the change to a weight matrix as the product of two thin matrices. The change can be merged into the weights afterwards, so inference is not slowed down. On GPT-3 it matched full fine-tuning with up to ten thousand times fewer trainable parameters.
+  \item \textbf{QLoRA}~\cite{dettmers2023qlora}: keep the frozen base weights in a 4-bit format (NF4) designed for normally distributed weights, compress the scaling constants as well (double quantisation), and move optimiser memory to the CPU during peaks (paged optimisers). This allowed a 65B model to be fine-tuned on one 48\,GB GPU.
+  \item \textbf{8-bit optimisers and gradient checkpointing}~\cite{dettmers2022optimizers,chen2016checkpointing}: store the AdamW~\cite{loshchilov2019adamw} state in 8 bits (about 75\% less optimiser memory), and recompute some activations during the backward pass instead of storing them.
+\end{itemize}
+Our DPO set-up on Kaggle uses all four together.
+
+\section{The Policy Model}
+\label{sec:lit-slm}
+TinyLlama~\cite{zhang2024tinyllama} is a 1.1B-parameter model that copies the architecture and tokenizer of Llama~2 and was trained on about three trillion tokens. Its chat version follows a standard chat template. We picked it because it is the smallest model we found that gives multi-sentence, mostly sensible answers, which is necessary for a reward model to tell good answers from bad ones. GPT-2 sized models produced text that was too noisy to compare.
+
+\section{Available Preference Datasets}
+\label{sec:lit-data}
+
+Table~\ref{tab:lit-datasets} compares the four public datasets we considered.
+\begin{itemize}
+  \item \textbf{HH-RLHF}~\cite{bai2022hh}: dialogues between crowd-workers and Anthropic models, with a preferred and a rejected final reply. We use the helpful-base part (43,835 training pairs). All examples share one fixed dialogue format and one written guideline.
+  \item \textbf{LMSYS Chatbot Arena}~\cite{chiang2024arena,zheng2023judging}: members of the public chat with two hidden models side by side and vote for one, or call it a tie. The file we use has 57,477 rows and about 31\% ties.
+  \item \textbf{UltraFeedback}~\cite{cui2023ultrafeedback}: around 64,000 prompts, each answered by four different models and rated by GPT-4 on several aspects. It is the dataset Zephyr was trained on.
+  \item \textbf{HelpSteer2}~\cite{wang2024helpsteer2}: about 10,000 responses rated by people on several attributes, released for training reward models.
+\end{itemize}
+
+\begin{table}[!htbp]
+\centering
+\caption[Public preference datasets]{Public preference datasets we considered.}
+\label{tab:lit-datasets}
+\small
+\begin{tabularx}{\textwidth}{@{}L{2.1cm}YYYY@{}}
+\toprule
+\textbf{Property} & \textbf{HH-RLHF} & \textbf{LMSYS Arena} & \textbf{UltraFeedback} & \textbf{HelpSteer2}\\
+\midrule
+Who labels & Paid contractors & Public visitors & GPT-4 & Paid raters\\
+Label type & Better / worse & Better / worse / tie & Score per aspect & Several attributes\\
+Prompts from & Crowd-workers & Real users & Existing benchmarks & Mixed\\
+Answers from & Anthropic models & About 60 public chatbots & 17 models & Several models\\
+Turns & Many & One or many & One & One or many\\
+Size & 160K (43.8K used) & 57.5K rows & 64K prompts & 10K\\
+Used here & \cmark & \cmark & Future work & Future work\\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\section{How Aligned Models Are Evaluated}
+\label{sec:lit-eval}
+Zheng \emph{et al.}~\cite{zheng2023judging} asked whether a strong model such as GPT-4 can stand in for human judges of open-ended answers. Agreement with people was above 80\%, about the same as agreement between two people, but the judge favoured the first answer shown, longer answers and its own outputs. Chiang \emph{et al.}~\cite{chiang2024arena} describe how Chatbot Arena turns millions of crowd votes into a ranking with a Bradley--Terry style model, and check that crowd votes agree well with expert votes. Kirk \emph{et al.}~\cite{kirk2024understanding} found that RLHF helps models handle new kinds of inputs better than supervised fine-tuning does, but makes their outputs much less varied. Casper \emph{et al.}~\cite{casper2023open} list the open problems of RLHF, including disagreements between evaluators, rewards that do not capture what was intended, reward hacking, and the difficulty of judging a policy with the same flawed signal used to train it. We use the reward model as the judge in our own evaluation, so that last point applies to us directly; we discuss it in Chapter~\ref{ch:results}.
+
+\section{Summary of the Reviewed Work}
+\label{sec:lit-summary}
+
+{\small
+\begin{longtable}{@{}L{0.6cm}L{3.6cm}L{5.0cm}L{4.9cm}@{}}
+\caption[Summary of reviewed papers]{Summary of the papers reviewed and how each one shaped our work.}\label{tab:lit-summary}\\
+\toprule
+\textbf{\#} & \textbf{Paper} & \textbf{Main idea} & \textbf{How we used it}\\
+\midrule\endfirsthead
+\toprule
+\textbf{\#} & \textbf{Paper} & \textbf{Main idea} & \textbf{How we used it}\\
+\midrule\endhead
+\bottomrule\endfoot
+1 & Christiano et al., 2017~\cite{christiano2017deep} & Learn a reward from human clip comparisons & Overall structure of our pipeline\\
+2 & Ziegler et al., 2019~\cite{ziegler2019finetuning} & Preference training for language; KL penalty & The $\beta$ term in DPO\\
+3 & Stiennon et al., 2020~\cite{stiennon2020summarize} & Human-feedback summaries; over-optimisation curve & Reason to distrust rising scores\\
+4 & Ouyang et al., 2022~\cite{ouyang2022instructgpt} & SFT, reward model, PPO & We implement stages 2 and 3\\
+5 & Bai et al., 2022~\cite{bai2022hh} & HH-RLHF dataset & First data source\\
+6 & Bai et al., 2022~\cite{bai2022cai} & Constitutional AI & Possible safety extension\\
+7 & Touvron et al., 2023~\cite{touvron2023llama2} & Separate reward models; accuracy depends on preference strength & Explains our modest accuracy\\
+8 & Bradley \& Terry, 1952~\cite{bradley1952rank} & Logistic model of paired choices & Reward-model loss\\
+9 & Gao et al., 2023~\cite{gao2023overoptimization} & How proxy rewards get over-optimised & Explains our reward-hacking case\\
+10 & Singhal et al., 2023~\cite{singhal2023length} & Length drives many RLHF gains & Same truncation for both sources\\
+11 & Lambert et al., 2024~\cite{lambert2024rewardbench} & Category-wise reward-model benchmark & Per-source reporting\\
+12 & Liu et al., 2024~\cite{liu2024skywork} & Curated mixed data for reward models & Supports mixing sources\\
+13 & He et al., 2023~\cite{he2023debertav3} & DeBERTaV3 encoder & Reward-model backbone\\
+14 & Schulman et al., 2017~\cite{schulman2017ppo} & PPO & Rejected as too heavy\\
+15 & Rafailov et al., 2023~\cite{rafailov2023dpo} & DPO & Our alignment method\\
+16 & Azar et al., 2024~\cite{azar2024ipo} & IPO; DPO over-fitting & Explains drift in config.\ B\\
+17 & Ethayarajh et al., 2024~\cite{ethayarajh2024kto} & KTO, unpaired labels & Future use of LMSYS ties\\
+18 & Meng et al., 2024~\cite{meng2024simpo} & SimPO, length-normalised & Future comparison\\
+19 & Hu et al., 2022~\cite{hu2022lora} & LoRA & Adapters in both models\\
+20 & Dettmers et al., 2023~\cite{dettmers2023qlora} & NF4, paged optimisers & 4-bit policy on T4\\
+21 & Zhang et al., 2024~\cite{zhang2024tinyllama} & TinyLlama-1.1B & Policy model\\
+22 & Chiang et al., 2024~\cite{chiang2024arena} & Chatbot Arena & Second data source\\
+23 & Zheng et al., 2023~\cite{zheng2023judging} & LLM as judge & Future independent judge\\
+24 & Casper et al., 2023~\cite{casper2023open} & Open problems of RLHF & Framing of our limitations\\
+\end{longtable}
+}
+
+\section{Comparing the Alignment Methods}
+\label{sec:lit-compare}
+
+\begin{table}[!htbp]
+\centering
+\caption[Comparison of alignment methods]{Alignment methods compared against the limits of a free GPU.}
+\label{tab:lit-algos}
+\footnotesize
+\begin{tabularx}{\textwidth}{@{}L{2.5cm}C{1.3cm}C{1.9cm}C{1.1cm}C{1.2cm}Y@{}}
+\toprule
+\textbf{Method} & \textbf{Models on GPU} & \textbf{Generates while training} & \textbf{Needs RM} & \textbf{Needs pairs} & \textbf{Comment}\\
+\midrule
+PPO-RLHF~\cite{ouyang2022instructgpt} & 4 & Yes & Yes & For RM & Flexible but heavy and hard to tune\\
+Best-of-$n$~\cite{nakano2021webgpt} & 2 & At use time & Yes & For RM & Simple; each answer costs $n$ samples\\
+DPO~\cite{rafailov2023dpo} & 2 & No & No & Yes & Stable and simple; can over-fit\\
+IPO~\cite{azar2024ipo} & 2 & No & No & Yes & Keeps regularisation with certain labels\\
+KTO~\cite{ethayarajh2024kto} & 2 & No & No & No & Works with good/bad labels\\
+ORPO~\cite{hong2024orpo} & 1 & No & No & Yes & Combines SFT and alignment\\
+SimPO~\cite{meng2024simpo} & 1 & No & No & Yes & No reference model; less length bias\\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\section{Gaps We Address}
+\label{sec:gaps}
+
+Reading this work together, we found four gaps that a student-scale project can reasonably address:
+\begin{enumerate}[label=\textbf{G\arabic*.}]
+  \item \textbf{One dataset, one number.} Tutorials and student projects usually train and test a reward model on a single dataset and report one accuracy. RewardBench shows that one number can hide weak categories, but splitting results by \emph{labelling source} is rarely done at small scale.
+  \item \textbf{Experts and crowds together.} Expert-labelled HH-RLHF and crowd-voted Arena data are rarely put into the same reward model, and the effect of the mixing ratio on each source has not been reported for small models.
+  \item \textbf{Free hardware.} Most RLHF and DPO code assumes A100-class GPUs with BF16. Advice for running the current Transformers, TRL and PEFT versions on a T4, which has no BF16, is scattered across issue threads.
+  \item \textbf{Honest evaluation at small scale.} Small projects often judge the aligned model with the same reward model used during development and rarely discuss the risks of doing so~\cite{gao2023overoptimization,casper2023open}.
+\end{enumerate}
+We address G1 and G2 by tagging every example with its source and reporting all results per source for two mixing ratios, G3 with a pipeline that runs on Kaggle T4 GPUs and on an 8\,GB laptop, and G4 by comparing DPO's training signals with the judge's verdicts and showing a concrete reward-hacking case.

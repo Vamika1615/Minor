@@ -1,0 +1,414 @@
+%% =====================================================================
+%%  UG Minor Project Report -- IGDTUW, Delhi
+%%  Reward Modeling and Direct Preference Optimization on Combined
+%%  Human Preference Data: A Cross-Distribution RLHF Pipeline
+%%  Compile:  latexmk -pdf main.tex     (or pdflatex -> bibtex -> pdflatex x2)
+%% =====================================================================
+\documentclass[a4paper,12pt,oneside]{report}
+
+%% ---------------------------------------------------------------------
+%%  EDIT THIS BLOCK: student, guide and department details
+%% ---------------------------------------------------------------------
+\newcommand{\ProjectTitle}{Reward Modeling and Direct Preference Optimization on Combined Human Preference Data}
+\newcommand{\ProjectSubtitle}{A Cross-Distribution RLHF Pipeline}
+\newcommand{\StudentA}{Saumya Shukla}    \newcommand{\EnrollA}{05901022023}
+\newcommand{\StudentB}{Kejal Garg}       \newcommand{\EnrollB}{07901022023}
+\newcommand{\StudentC}{Pranjal Jain}     \newcommand{\EnrollC}{08101022023}
+\newcommand{\StudentD}{Vamika Bhardwaj}  \newcommand{\EnrollD}{00411022024}
+\newcommand{\GuideName}{Prof.\ (Dr.)\ Ashwni Kumar}
+\newcommand{\GuideDesig}{Pro Vice-Chancellor}
+\newcommand{\Semester}{VII}
+\newcommand{\HODName}{[HOD Name]}
+\newcommand{\Department}{Electronics and Communication Engineering}
+\newcommand{\DeptShort}{ECE}
+\newcommand{\Degree}{Bachelor of Technology}
+\newcommand{\Branch}{Electronics and Communication Engineering}
+\newcommand{\AcadYear}{2026--27}
+\newcommand{\SubmissionDate}{November 2026}
+\newcommand{\University}{Indira Gandhi Delhi Technical University for Women}
+\newcommand{\UnivShort}{IGDTUW}
+\newcommand{\UnivAddress}{Kashmere Gate, Delhi -- 110006, India}
+%% ---------------------------------------------------------------------
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage[a4paper,left=1.25in,right=1in,top=1in,bottom=1in,headheight=15pt]{geometry}
+\usepackage{setspace}
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage[table]{xcolor}
+\usepackage{tikz}
+\usetikzlibrary{shapes.geometric,shapes.misc,arrows.meta,positioning,fit,calc,backgrounds,shadows}
+\usepackage{eso-pic}
+\usepackage{fancyhdr}
+\usepackage{titlesec}
+\usepackage{booktabs,tabularx,multirow,array,longtable,colortbl}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{float}
+\usepackage{enumitem}
+\usepackage{listings}
+\usepackage{ragged2e}
+\usepackage{etoolbox}
+\usepackage{pifont}
+\usepackage[hidelinks]{hyperref}
+\usepackage{url}
+
+%% ---------- table column types: wrap and align left, never squeeze ----------
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
+\newcolumntype{C}[1]{>{\centering\arraybackslash}p{#1}}
+\newcolumntype{Y}{>{\raggedright\arraybackslash}X}
+\newcolumntype{Z}{>{\centering\arraybackslash}X}
+\renewcommand{\arraystretch}{1.15}
+
+%% ---------- colours (taken from the IGDTUW crest) ----------
+\definecolor{igdtuwgreen}{RGB}{47,79,36}
+\definecolor{igdtuworange}{RGB}{214,120,30}
+\definecolor{igdtuwred}{RGB}{200,40,40}
+\definecolor{chapgray}{RGB}{120,120,120}
+\definecolor{codebg}{RGB}{247,248,246}
+\definecolor{codekw}{RGB}{0,90,160}
+\definecolor{codestr}{RGB}{170,60,20}
+\definecolor{codecom}{RGB}{90,120,90}
+\definecolor{boxA}{RGB}{214,232,245}
+\definecolor{boxB}{RGB}{214,240,222}
+\definecolor{boxC}{RGB}{252,235,210}
+\definecolor{boxD}{RGB}{232,222,240}
+\definecolor{boxE}{RGB}{245,220,220}
+
+\onehalfspacing
+\setlength{\emergencystretch}{3em}
+\setlength{\parindent}{1.5em}
+\setlength{\parskip}{4pt}
+\captionsetup{font=small,labelfont=bf,skip=6pt}
+\setlist{itemsep=2pt,topsep=4pt}
+
+%% ---------- chapter / section headings ----------
+\titleformat{\chapter}[display]
+  {\normalfont\bfseries\centering}
+  {\color{chapgray}\sffamily\Large\MakeUppercase{\chaptertitlename}\ \thechapter}
+  {6pt}
+  {\color{igdtuwgreen}\LARGE\MakeUppercase}
+\titlespacing*{\chapter}{0pt}{-10pt}{18pt}
+\titleformat{name=\chapter,numberless}[display]
+  {\normalfont\bfseries\centering}{}{0pt}{\color{igdtuwgreen}\LARGE\MakeUppercase}
+\titlespacing*{name=\chapter,numberless}{0pt}{-10pt}{18pt}
+\titleformat{\section}{\normalfont\Large\bfseries\color{igdtuwgreen!85!black}}{\thesection}{1em}{}
+\titleformat{\subsection}{\normalfont\large\bfseries}{\thesubsection}{1em}{}
+\titleformat{\subsubsection}{\normalfont\normalsize\bfseries}{\thesubsubsection}{1em}{}
+\setcounter{secnumdepth}{3}
+\setcounter{tocdepth}{2}
+
+%% ---------- headers / footers ----------
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[C]{\small \University, Delhi}
+\fancyfoot[L]{\small UG Minor Project Report}
+\fancyfoot[C]{\small Department of \DeptShort, \AcadYear}
+\fancyfoot[R]{\small \thepage}
+\renewcommand{\headrulewidth}{0.5pt}
+\renewcommand{\footrulewidth}{0.5pt}
+\fancypagestyle{plain}{%
+  \fancyhf{}
+  \fancyhead[C]{\small \University, Delhi}
+  \fancyfoot[L]{\small UG Minor Project Report}
+  \fancyfoot[C]{\small Department of \DeptShort, \AcadYear}
+  \fancyfoot[R]{\small \thepage}
+  \renewcommand{\headrulewidth}{0.5pt}
+  \renewcommand{\footrulewidth}{0.5pt}}
+\fancypagestyle{frontmatter}{%
+  \fancyhf{}
+  \fancyfoot[C]{\small \thepage}
+  \renewcommand{\headrulewidth}{0pt}
+  \renewcommand{\footrulewidth}{0.5pt}}
+
+%% ---------- faint university crest as a watermark on every page ----------
+\AddToShipoutPictureBG{%
+  \AtPageCenter{%
+    \makebox(0,0){\tikz\node[opacity=0.07,inner sep=0]{\includegraphics[width=0.55\paperwidth]{figures/logo.png}};}}}
+
+%% ---------- thick border for the opening pages ----------
+\newcommand{\PageBorder}{%
+  \AddToShipoutPictureFG*{%
+    \begin{tikzpicture}[remember picture,overlay]
+      \draw[line width=3pt,color=black]
+        ($(current page.north west)+(0.75in,-0.6in)$) rectangle ($(current page.south east)+(-0.6in,0.6in)$);
+      \draw[line width=0.8pt,color=igdtuwgreen]
+        ($(current page.north west)+(0.82in,-0.67in)$) rectangle ($(current page.south east)+(-0.67in,0.67in)$);
+    \end{tikzpicture}}}
+
+%% ---------- code listings ----------
+\lstdefinestyle{py}{
+  language=Python,
+  backgroundcolor=\color{codebg},
+  basicstyle=\ttfamily\footnotesize\linespread{0.95}\selectfont,
+  keywordstyle=\color{codekw}\bfseries,
+  stringstyle=\color{codestr},
+  commentstyle=\color{codecom}\itshape,
+  numbers=left, numberstyle=\tiny\color{chapgray}, numbersep=5pt,
+  frame=single, rulecolor=\color{black!25},
+  breaklines=true, breakatwhitespace=false, showstringspaces=false,
+  tabsize=4, columns=fullflexible, keepspaces=true,
+  xleftmargin=24pt, framexleftmargin=21pt, framesep=3pt,
+  aboveskip=8pt, belowskip=8pt,
+  literate={→}{{$\rightarrow$}}1 {Δ}{{$\Delta$}}1 {μ}{{$\mu$}}1 {−}{{-}}1 {—}{{--}}1 {×}{{$\times$}}1
+}
+\lstdefinestyle{algo}{
+  basicstyle=\ttfamily\small\linespread{1.0}\selectfont,
+  backgroundcolor=\color{igdtuwgreen!4},
+  frame=tb, rulecolor=\color{igdtuwgreen}, framerule=0.8pt,
+  numbers=left, numberstyle=\tiny\color{chapgray},
+  mathescape=true, breaklines=true, columns=fullflexible, keepspaces=true,
+  xleftmargin=24pt, framexleftmargin=21pt, framesep=3pt,
+  morekeywords={Input,Output,for,each,do,end,if,then,else,return,while,Require,Ensure},
+  keywordstyle=\bfseries\color{igdtuwgreen}
+}
+\lstset{style=py}
+\renewcommand{\lstlistingname}{Listing}
+\renewcommand{\lstlistlistingname}{List of Listings}
+
+%% ---------- algorithm environment built on a float ----------
+\newcounter{algo}[chapter]
+\renewcommand{\thealgo}{\thechapter.\arabic{algo}}
+\newenvironment{algobox}[1]{%
+  \refstepcounter{algo}\par\medskip\noindent
+  {\bfseries\color{igdtuwgreen}Algorithm \thealgo:}\ #1\par\vspace{-4pt}}{\par\medskip}
+
+%% ---------- handy macros ----------
+\newcommand{\cmark}{\ding{51}}
+\newcommand{\xmark}{\ding{55}}
+\newcommand{\reportedtag}{\textsuperscript{\textdagger}}
+\newcommand{\HH}{HH-RLHF}
+\newcommand{\LM}{LMSYS}
+\newcommand{\pit}{\pi_\theta}
+\newcommand{\piref}{\pi_{\mathrm{ref}}}
+
+\renewcommand{\contentsname}{Contents}
+\renewcommand{\bibname}{References}
+
+\begin{document}
+
+%% =====================================================================
+%%  COVER PAGE
+%% =====================================================================
+\begin{titlepage}
+\PageBorder
+\thispagestyle{empty}
+\centering
+\vspace*{-0.35in}
+\includegraphics[width=1.15in]{figures/logo.png}\\[6pt]
+{\large\bfseries\color{igdtuwgreen} INDIRA GANDHI DELHI TECHNICAL UNIVERSITY FOR WOMEN}\\[2pt]
+{\small (Established by Govt. of Delhi vide Act 09 of 2012)}\\[1pt]
+{\small \UnivAddress}\\[12pt]
+{\LARGE\bfseries \ProjectTitle:}\\[6pt]
+{\Large\bfseries \ProjectSubtitle}\\[10pt]
+{\large\itshape A Minor Project Report}\\[10pt]
+{\normalsize submitted in partial fulfilment of the requirements for the award of the degree of}\\[4pt]
+{\large\bfseries \Degree}\\[2pt]
+{\normalsize in}\\[2pt]
+{\large\bfseries \Branch}\\[12pt]
+{\large\bfseries Submitted by}\\[6pt]
+\begin{tabular}{@{}l@{\hspace{3cm}}r@{}}
+\textbf{\StudentA} & \textbf{\EnrollA}\\[2pt]
+\textbf{\StudentB} & \textbf{\EnrollB}\\[2pt]
+\textbf{\StudentC} & \textbf{\EnrollC}\\[2pt]
+\textbf{\StudentD} & \textbf{\EnrollD}\\
+\end{tabular}\\[12pt]
+{\large\bfseries Under the guidance of}\\[6pt]
+{\bfseries \GuideName}\\
+\GuideDesig\\
+\University
+\vfill
+{\large\bfseries Department of \Department}\\[2pt]
+{\large\bfseries \University}\\[2pt]
+{\bfseries Delhi, India}\\[4pt]
+{\bfseries \SubmissionDate}
+\end{titlepage}
+
+\pagenumbering{roman}
+\setcounter{page}{1}
+\pagestyle{frontmatter}
+
+%% =====================================================================
+%%  CERTIFICATE
+%% =====================================================================
+\newpage\PageBorder\thispagestyle{empty}
+\begin{center}
+{\Large\bfseries \University}\\[2pt]
+{\itshape (Established by Govt. of Delhi vide Act 09 of 2012)}\\[2pt]
+{\bfseries Department of \Department}\\[10pt]
+\includegraphics[width=0.85in]{figures/logo.png}\\[8pt]
+{\Large\bfseries\underline{CERTIFICATE}}
+\end{center}
+\vspace{2pt}
+This is to certify that the minor project report entitled \textbf{\textit{``\ProjectTitle: \ProjectSubtitle''}} submitted by \textbf{\StudentA} (\textbf{\EnrollA}), \textbf{\StudentB} (\textbf{\EnrollB}), \textbf{\StudentC} (\textbf{\EnrollC}) and \textbf{\StudentD} (\textbf{\EnrollD}), students of Semester \Semester, in partial fulfilment of the requirements for the award of the degree of \textbf{\Degree} in \textbf{\Branch} at \textbf{\University, Delhi}, is a bonafide record of the work carried out by them under my supervision and guidance during the academic year \AcadYear.
+
+The matter embodied in this report is original to the best of my knowledge and has not been submitted, either in part or in full, for the award of any other degree or diploma at this or any other university or institution. All corrections and suggestions indicated during internal assessment have been incorporated in the report.
+
+\vspace{1.1cm}
+\noindent
+\begin{tabularx}{\textwidth}{@{}X X@{}}
+\rule{5cm}{0.4pt} & \hfill\rule{5cm}{0.4pt}\\
+\textbf{\GuideName} & \hfill\textbf{\HODName}\\
+(Project Guide) & \hfill(Head of Department)\\
+\GuideDesig & \hfill Dept. of \DeptShort\\
+\UnivShort, Delhi & \hfill \UnivShort, Delhi\\
+\end{tabularx}
+
+\vspace{0.6cm}
+\begin{center}{\large\bfseries External Viva-Voce}\end{center}\vspace{-6pt}
+\noindent\begin{tabularx}{\textwidth}{@{}X r@{}}
+Name of Examiner(s) & Signature with Date\\[10pt]
+1. \rule{6cm}{0.4pt} & \rule{4cm}{0.4pt}\\[10pt]
+2. \rule{6cm}{0.4pt} & \rule{4cm}{0.4pt}\\
+\end{tabularx}
+
+%% =====================================================================
+%%  DECLARATION
+%% =====================================================================
+\newpage\PageBorder\thispagestyle{empty}
+\begin{center}{\Large\bfseries\underline{DECLARATION}}\end{center}
+\vspace{6pt}
+We, \textbf{\StudentA}, \textbf{\StudentB}, \textbf{\StudentC} and \textbf{\StudentD}, students of Semester \Semester, \textbf{\Degree} in \textbf{\Branch}, \University, Delhi, hereby declare that the minor project report entitled \textbf{``\ProjectTitle: \ProjectSubtitle''} is an authentic record of our own work carried out under the supervision of \textbf{\GuideName}, \GuideDesig, \UnivShort, during the academic year \AcadYear.
+
+We further declare that the content of this report has not been submitted previously, either in part or in full, by us or by anybody else for the award of any degree or diploma at this or any other university or institution. Wherever the work of others has been used, it has been duly acknowledged and cited in the text and listed in the references.
+
+We also declare that the experimental results reported in this document have been obtained by us from the notebooks submitted with this project, and that the figures reported in our earlier paper draft are explicitly distinguished from them in Chapter~5.
+
+\vspace{1cm}
+\noindent Place: Delhi\\[4pt]
+Date: \rule{4cm}{0.4pt}
+
+\vspace{1.4cm}
+\noindent\begin{tabularx}{\textwidth}{@{}l X r@{}}
+\textbf{S.No.} & \textbf{Name (Enrollment No.)} & \textbf{Signature}\\[10pt]
+1. & \StudentA\ (\EnrollA) & \rule{4cm}{0.4pt}\\[14pt]
+2. & \StudentB\ (\EnrollB) & \rule{4cm}{0.4pt}\\[14pt]
+3. & \StudentC\ (\EnrollC) & \rule{4cm}{0.4pt}\\[14pt]
+4. & \StudentD\ (\EnrollD) & \rule{4cm}{0.4pt}\\
+\end{tabularx}
+
+%% =====================================================================
+%%  ACKNOWLEDGEMENT
+%% =====================================================================
+\newpage\PageBorder\thispagestyle{empty}
+\begin{center}{\Large\bfseries\underline{ACKNOWLEDGEMENT}}\end{center}
+\vspace{6pt}
+We are deeply indebted to our project guide, \textbf{\GuideName}, \GuideDesig, \University, for the constant encouragement, critical feedback and patient guidance offered throughout this project. Their insistence on measuring results honestly and per data source shaped the evaluation methodology of this work.
+
+We express our sincere gratitude to \textbf{\HODName}, Head of the Department of \Department, for providing an environment that encourages independent research, and to the members of the evaluation panel for their valuable comments during the phase reviews.
+
+We thank the Vice-Chancellor and the administration of \textbf{\University, Delhi} for the academic facilities extended to us, and all the teaching and technical staff of the Department of \Department\ for their help at various stages of the work.
+
+We gratefully acknowledge the open-source communities behind PyTorch, HuggingFace Transformers, TRL, PEFT, bitsandbytes and Datasets, the teams at Anthropic and LMSYS for publicly releasing the HH-RLHF and Chatbot Arena preference datasets, and Kaggle for providing free GPU compute without which this project would not have been possible.
+
+Lastly, we thank our families and friends for their unwavering support and encouragement throughout the course of this project.
+
+\vspace{1.2cm}
+\hfill\begin{tabular}{r}
+\StudentA\\ \StudentB\\ \StudentC\\ \StudentD
+\end{tabular}
+
+%% =====================================================================
+%%  ABSTRACT
+%% =====================================================================
+\newpage
+\chapter*{Abstract}
+\addcontentsline{toc}{chapter}{Abstract}
+A language model trained only to predict the next word writes fluently but does not reliably give the answer a user wants. Reinforcement Learning from Human Feedback (RLHF) addresses this by training on human choices between pairs of answers. Student projects in this area usually train and test on one preference dataset. This can hide a real problem: the reward model may learn the habits of that one dataset rather than what people prefer in general.
+
+In this project we built a preference-alignment pipeline that deliberately mixes two datasets labelled in very different ways: \textbf{Anthropic HH-RLHF}, judged by paid annotators following written guidelines, and \textbf{LMSYS Chatbot Arena}, 57,477 votes cast by members of the public. Both are converted to one source-tagged format, filtered the same way, balanced and split per source. We train a \textbf{DeBERTa-v3-base} reward model with LoRA using the Bradley--Terry loss, and align \textbf{TinyLlama-1.1B-Chat} with \textbf{Direct Preference Optimization (DPO)} using 4-bit weights and LoRA, which trains under 1\% of its parameters on a free 16\,GB GPU. Every result is reported separately for each source. We then packaged the work as a reusable system, a command-line pipeline and a web application that shows the base and aligned models' answers side by side with their scores, and retrained a smaller version on an 8\,GB laptop.
+
+On Kaggle the reward models reach 59.2\% and 59.6\% accuracy on held-out pairs, with equal accuracy on both sources in the balanced run; the laptop run reaches 57.1\%. DPO fits its training pairs well (80--95\% implicit accuracy), yet on 50 new prompts the aligned model is preferred only 50\% of the time. In one configuration that 50\% hides a significant split, 24\% on HH-RLHF prompts against 76\% on LMSYS prompts, which only per-source evaluation reveals. We also show a case where the reward model rewarded a wrong answer. Higher figures from our earlier paper draft (72.6\% and 66\%) are listed separately because our code does not reproduce them.
+
+\vspace{6pt}\noindent\textbf{Keywords:} RLHF, reward modelling, Direct Preference Optimization, DeBERTa-v3, TinyLlama, LoRA, QLoRA, per-source evaluation, Bradley--Terry model, Gradio.
+
+\pagestyle{plain}
+\tableofcontents
+\addcontentsline{toc}{chapter}{List of Figures}
+\listoffigures
+\addcontentsline{toc}{chapter}{List of Tables}
+\listoftables
+\addcontentsline{toc}{chapter}{List of Listings}
+\lstlistoflistings
+
+\chapter*{List of Abbreviations}
+\addcontentsline{toc}{chapter}{List of Abbreviations}
+\begin{longtable}{@{}p{3.2cm}p{11cm}@{}}
+\toprule
+\textbf{Abbreviation} & \textbf{Full Form}\\
+\midrule\endhead
+AI & Artificial Intelligence\\
+BT & Bradley--Terry (pairwise preference model)\\
+CAI & Constitutional AI\\
+DeBERTa & Decoding-enhanced BERT with Disentangled Attention\\
+DFD & Data Flow Diagram\\
+DPO & Direct Preference Optimization\\
+FP16 / FP32 / BF16 & 16-bit float / 32-bit float / brain-float 16 numeric formats\\
+GPU & Graphics Processing Unit\\
+HH-RLHF & Anthropic Helpful and Harmless RLHF dataset\\
+IPO & Identity Preference Optimization\\
+KL & Kullback--Leibler divergence\\
+KTO & Kahneman--Tversky Optimization\\
+LLM & Large Language Model\\
+LMSYS & Large Model Systems Organization (Chatbot Arena)\\
+LoRA & Low-Rank Adaptation\\
+NF4 & 4-bit NormalFloat quantisation data type\\
+ORPO & Odds-Ratio Preference Optimization\\
+PEFT & Parameter-Efficient Fine-Tuning\\
+PPO & Proximal Policy Optimization\\
+QLoRA & Quantised Low-Rank Adaptation\\
+RL & Reinforcement Learning\\
+RLAIF & Reinforcement Learning from AI Feedback\\
+RLHF & Reinforcement Learning from Human Feedback\\
+RM & Reward Model\\
+SFT & Supervised Fine-Tuning\\
+TRL & Transformer Reinforcement Learning (HuggingFace library)\\
+VRAM & Video Random Access Memory (GPU memory)\\
+\bottomrule
+\end{longtable}
+
+\chapter*{List of Symbols}
+\addcontentsline{toc}{chapter}{List of Symbols}
+\begin{longtable}{@{}p{3.2cm}p{11cm}@{}}
+\toprule
+\textbf{Symbol} & \textbf{Meaning}\\
+\midrule\endhead
+$x$ & Prompt (conversation context given to the model)\\
+$y_c,\ y_r$ & Chosen (preferred) and rejected responses\\
+$\mathcal{D}$ & Preference dataset of triples $(x, y_c, y_r)$\\
+$r_\phi(x,y)$ & Scalar reward predicted by the reward model with parameters $\phi$\\
+$\sigma(\cdot)$ & Logistic sigmoid function, $\sigma(z)=1/(1+e^{-z})$\\
+$\pit$ & Policy (language model being aligned) with parameters $\theta$\\
+$\piref$ & Frozen reference policy\\
+$\beta$ & DPO / KL-regularisation temperature\\
+$\hat r_\theta(x,y)$ & DPO implicit reward, $\beta\log\frac{\pit(y\mid x)}{\piref(y\mid x)}$\\
+$W_0,\ \Delta W$ & Frozen pre-trained weight matrix and its low-rank update\\
+$A,\ B$ & LoRA down- and up-projection matrices\\
+$r,\ \alpha$ & LoRA rank and scaling factor\\
+$\mathcal{L}_{\mathrm{RM}},\ \mathcal{L}_{\mathrm{DPO}}$ & Reward-model and DPO training losses\\
+$\Delta$ & Reward improvement, RM(DPO response) $-$ RM(base response)\\
+\bottomrule
+\end{longtable}
+
+\cleardoublepage
+\pagenumbering{arabic}
+\setcounter{page}{1}
+
+\input{chapters/ch1_introduction}
+\input{chapters/ch2_literature}
+\input{chapters/ch3_methodology}
+\input{chapters/ch4_implementation}
+\input{chapters/ch5_results}
+\input{chapters/ch6_conclusion}
+
+\cleardoublepage
+\addcontentsline{toc}{chapter}{References}
+\bibliographystyle{ieeetr}
+\bibliography{references}
+
+\appendix
+\input{chapters/appendix}
+
+\end{document}

@@ -1,0 +1,505 @@
+\chapter{System Design and Methodology}
+\label{ch:method}
+
+Our system takes two preference datasets that were never meant to be used together and turns them into a trained reward model, an aligned chat model and a set of results split by data source. In this chapter we lay out how the pieces fit: the overall architecture, data-flow diagrams at three levels, the order in which a run executes, the maths behind each training step, the two model architectures, the data, the measures we report, and the software and hardware we used. We finish with a table of the main design decisions and the reason for each.
+
+\section{Proposed Architecture}
+\label{sec:arch}
+
+We split the work into four stages that run one after another (Figure~\ref{fig:arch}). Every stage writes its result to disk, and a stage is skipped when its result is already there, so a run that stops halfway can carry on where it left off.
+
+\begin{enumerate}
+  \item \textbf{Dataset preparation:} read both sources, convert them to one format, clean, balance and split them so each split contains both sources.
+  \item \textbf{Reward model:} a DeBERTa-v3-base classifier with a single output, LoRA adapters and a trainable pooler, fitted with the Bradley--Terry loss.
+  \item \textbf{DPO:} TinyLlama-1.1B-Chat in 4-bit with LoRA adapters, trained with the DPO loss; the reference model is the same network with its adapters switched off.
+  \item \textbf{Evaluation:} reward-model accuracy per source on the test split, and base versus DPO answers on demo and held-out prompts, scored by the reward model.
+\end{enumerate}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+  stage/.style={draw, thick, rounded corners=4pt, text width=11.6cm, minimum height=1.2cm, align=center, font=\footnotesize},
+  arr/.style={-{Stealth[length=3mm]}, very thick, color=black!65}]
+\node[stage, fill=boxA] (s1) at (0,0) {{\small\bfseries Stage 1: Combined Dataset}\\HH-RLHF (43,835 pairs) + LMSYS Arena (57,477 rows) $\rightarrow$ common schema $\rightarrow$ balanced, stratified splits};
+\node[stage, fill=boxB] (s2) at (0,-2) {{\small\bfseries Stage 2: Reward Model Training}\\DeBERTa-v3-base (184M) + LoRA on query/key/value + trainable pooler; Bradley--Terry loss; FP32};
+\node[stage, fill=boxC] (s3) at (0,-4) {{\small\bfseries Stage 3: DPO Fine-Tuning}\\TinyLlama-1.1B-Chat; 4-bit NF4 + double quantisation; LoRA; paged AdamW-8bit; gradient checkpointing};
+\node[stage, fill=boxD] (s4) at (0,-6) {{\small\bfseries Stage 4: Evaluation}\\RM pairwise accuracy per source $\cdot$ 5-prompt demo $\cdot$ 50 held-out prompts (25 + 25) $\cdot$ interactive mode};
+\draw[arr] (s1) -- (s2); \draw[arr] (s2) -- (s3); \draw[arr] (s3) -- (s4);
+\draw[arr, dashed, color=igdtuworange] (s1.east) -- ++(0.5,0) |- (s3.east);
+\draw[arr, dashed, color=igdtuworange] (s2.west) -- ++(-0.5,0) |- (s4.west);
+\node[font=\scriptsize, color=igdtuworange!80!black, rotate=90] at ($(s2.east)+(0.75,0)$) {train split reused};
+\node[font=\scriptsize, color=igdtuworange!80!black, rotate=90] at ($(s3.west)+(-0.75,0)$) {RM used as judge};
+\end{tikzpicture}
+\caption[Four-stage system architecture]{Four-stage architecture of the proposed pipeline. Dashed arrows show data reuse across stages.}
+\label{fig:arch}
+\end{figure}
+
+\section{Data Flow Diagrams}
+\label{sec:dfd}
+
+\subsection{Level-0 DFD (context diagram)}
+Seen from outside (Figure~\ref{fig:dfd0}), the system talks to three kinds of external party: the two dataset providers (HuggingFace Hub for HH-RLHF and Kaggle for LMSYS), the pre-trained model hub (HuggingFace Hub for DeBERTa-v3 and TinyLlama) and the user/evaluator who supplies prompts and receives comparisons and reports.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+  ext/.style={draw, thick, text width=2.6cm, minimum height=1.1cm, align=center, font=\footnotesize, fill=boxA},
+  proc/.style={draw, thick, circle, minimum size=3.1cm, align=center, font=\footnotesize\bfseries, fill=boxB},
+  arr/.style={-{Stealth[length=2.4mm]}, thick},
+  lbl/.style={font=\scriptsize, align=center, fill=white, inner sep=1pt}]
+\node[proc] (p) at (0,0) {0.0\\Cross-Distribution\\RLHF System};
+\node[ext] (d1) at (-4.9,1.4) {HuggingFace Hub\\(HH-RLHF)};
+\node[ext] (d2) at (-4.9,-1.4) {Kaggle\\(LMSYS train.csv)};
+\node[ext] (m) at (4.9,1.4) {Model Hub\\(DeBERTa-v3, TinyLlama)};
+\node[ext] (u) at (4.9,-1.4) {User / Evaluator};
+\draw[arr] (d1.east) -- node[lbl, above, sloped]{preference pairs} (p);
+\draw[arr] (d2.east) -- node[lbl, below, sloped]{arena votes} (p);
+\draw[arr] (m.west) -- node[lbl, above, sloped]{pre-trained weights} (p);
+\draw[arr] ([yshift=4pt]u.west) -- node[lbl, above, sloped]{prompts} ($(p.south east)+(0.05,0.35)$);
+\draw[arr] ($(p.south east)+(-0.2,0.05)$) -- node[lbl, below, sloped]{responses, scores, plots} ([yshift=-6pt]u.west);
+\end{tikzpicture}
+\caption[Level-0 data flow diagram]{Level-0 data flow diagram (context diagram).}
+\label{fig:dfd0}
+\end{figure}
+
+\subsection{Level-1 DFD}
+Figure~\ref{fig:dfd1} opens up the system into five processes and four stores. D1 keeps the split dataset, D2 the reward-model adapter with its training log, D3 the DPO adapter with its log, and D4 the evaluation files (CSV tables and plots).
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+  proc/.style={draw, thick, rounded corners=8pt, text width=2.4cm, minimum height=1.15cm, align=center, font=\footnotesize, fill=boxB},
+  store/.style={draw, thick, text width=2.6cm, minimum height=0.65cm, align=center, font=\scriptsize, fill=boxC},
+  ext/.style={draw, thick, text width=1.9cm, minimum height=1.0cm, align=center, font=\footnotesize, fill=boxA},
+  arr/.style={-{Stealth[length=2.2mm]}, thick},
+  lbl/.style={font=\scriptsize, align=center, fill=white, inner sep=1pt}]
+\node[ext]  (src) at (0,0)      {Dataset\\providers};
+\node[proc] (p1)  at (3.4,0)    {1.0 Prepare combined dataset};
+\node[proc] (p2)  at (7.2,0)    {2.0 Train reward model};
+\node[proc] (p3)  at (11.0,0)   {3.0 DPO-align policy};
+\node[store] (d1) at (3.4,-2.1) {D1 \textbar\ train / val / test};
+\node[store] (d2) at (7.2,-2.1) {D2 \textbar\ RM adapter};
+\node[store] (d3) at (11.0,-2.1) {D3 \textbar\ DPO adapter};
+\node[proc] (p4)  at (5.3,-4.4) {4.0 Evaluate RM per source};
+\node[proc] (p5)  at (9.1,-4.4) {5.0 Compare base vs.\ DPO};
+\node[ext]  (usr) at (12.9,-4.4) {User /\\Evaluator};
+\node[store] (d4) at (7.2,-6.4) {D4 \textbar\ CSV + plots};
+\draw[arr] (src) -- node[lbl, above]{raw pairs} (p1);
+\draw[arr] (p1) -- node[lbl, right]{splits} (d1);
+\draw[arr] (d1.north east) -- node[lbl, sloped, above]{train, val} (p2.south west);
+\draw[arr] (p2) -- node[lbl, right]{weights} (d2);
+\draw[arr] (p3) -- node[lbl, right]{weights} (d3);
+\draw[arr] ($(d1.south)+(0.4,0)$) |- (9.3,-3.0) -- node[lbl, pos=0.55, right]{train pairs} (9.3,0) -- (p3.west);
+\draw[arr] ($(d1.south)+(-0.4,0)$) |- node[lbl, pos=0.75, below]{test} (p4.west);
+\draw[arr] ($(d2.south)+(-0.9,0)$) -- node[lbl, left]{RM} ($(p4.north)+(1.0,0)$);
+\draw[arr] ($(d2.south)+(0.9,0)$) -- node[lbl, right]{judge} ($(p5.north)+(-1.0,0)$);
+\draw[arr] ($(d3.south)+(-0.8,0)$) -- node[lbl, right]{policy} ($(p5.north)+(1.1,0)$);
+\draw[arr] ([yshift=5pt]usr.west) -- node[lbl, above]{prompts} ([yshift=5pt]p5.east);
+\draw[arr] ([yshift=-5pt]p5.east) -- node[lbl, below]{results} ([yshift=-5pt]usr.west);
+\draw[arr] (p4.south) |- (d4.west);
+\draw[arr] (p5.south) |- (d4.east);
+\end{tikzpicture}
+\caption[Level-1 data flow diagram]{Level-1 data flow diagram showing processes 1.0--5.0 and data stores D1--D4.}
+\label{fig:dfd1}
+\end{figure}
+
+\subsection{Level-2 DFD for dataset preparation}
+Process 1.0 is the most intricate part of the data engineering. Figure~\ref{fig:dfd2} expands it into its sub-processes.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+  proc/.style={draw, thick, rounded corners=6pt, text width=2.5cm, minimum height=1.15cm, align=center, font=\scriptsize, fill=boxB},
+  arr/.style={-{Stealth[length=2.2mm]}, thick}]
+\node[proc, fill=boxA] (a1) at (0,1.3)   {1.1 Load HH-RLHF helpful-base (43,835)};
+\node[proc]            (a2) at (3.3,1.3) {1.2 Split on last ``Assistant:'' turn (43,783 valid)};
+\node[proc, fill=boxA] (b1) at (0,-1.3)  {1.3 Load LMSYS train.csv (57,477)};
+\node[proc]            (b2) at (3.3,-1.3){1.4 Drop ties, parse JSON, map winner (39,678 valid)};
+\node[proc]            (c)  at (6.7,0)   {1.5 Truncate at 1,500 chars; drop fields $<$20 chars};
+\node[proc]            (d)  at (10.0,0)  {1.6 Shuffle \& sample per source (balance)};
+\node[proc]            (e)  at (10.0,-2.6) {1.7 Stratified 87.5 / 6.25 / 6.25 split};
+\node[proc, fill=boxC] (f)  at (6.7,-2.6) {D1: train / val / test (+ source tag)};
+\draw[arr] (a1) -- (a2); \draw[arr] (b1) -- (b2);
+\draw[arr] (a2.east) -- (c.north west); \draw[arr] (b2.east) -- (c.south west);
+\draw[arr] (c) -- (d); \draw[arr] (d) -- (e); \draw[arr] (e) -- (f);
+\end{tikzpicture}
+\caption[Level-2 data flow diagram (dataset preparation)]{Level-2 data flow diagram of process 1.0 (combined dataset preparation). Counts are from the executed notebooks.}
+\label{fig:dfd2}
+\end{figure}
+
+\section{Execution Flowchart}
+\label{sec:flow}
+
+A Kaggle session has a time limit and its working folder is emptied when it ends. We therefore wrote each training stage so that it first looks for a saved model and trains only when none is found. Figure~\ref{fig:flowchart} follows one full run through these checks.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+  node distance=0.5cm,
+  start/.style={draw, thick, rounded rectangle, minimum width=3cm, minimum height=0.8cm, fill=igdtuwgreen!25, font=\small},
+  proc/.style={draw, thick, rectangle, minimum width=4.6cm, minimum height=0.8cm, align=center, fill=boxA, font=\small},
+  dec/.style={draw, thick, diamond, aspect=2.4, inner sep=1pt, align=center, fill=boxC, font=\scriptsize},
+  arr/.style={-{Stealth[length=2.3mm]}, thick}]
+\node[start] (st) {Start};
+\node[proc, below=of st] (env) {Set env vars, detect BASE\_DIR,\\locate saved adapters};
+\node[proc, below=of env] (data) {Load \& combine datasets (Stage 1)};
+\node[dec, below=of data] (q1) {RM adapter\\exists?};
+\node[proc, right=1.4cm of q1] (trm) {Train RM; save adapter\\+ training log};
+\node[proc, below=0.7cm of q1] (lrm) {Load DeBERTa + RM adapter};
+\node[proc, below=of lrm] (erm) {Per-source RM evaluation};
+\node[dec, below=of erm] (q2) {DPO adapter\\exists?};
+\node[proc, right=1.4cm of q2] (tdpo) {DPO-train TinyLlama;\\save adapter + log};
+\node[proc, below=0.7cm of q2] (lpol) {Load base + DPO policies (4-bit)};
+\node[proc, below=of lpol] (demo) {5-prompt demo + 50-prompt eval};
+\node[proc, below=of demo] (inter) {Interactive comparison loop};
+\node[start, below=of inter] (en) {End};
+\draw[arr] (st) -- (env); \draw[arr] (env) -- (data); \draw[arr] (data) -- (q1);
+\draw[arr] (q1) -- node[above, font=\scriptsize]{No} (trm);
+\draw[arr] (q1) -- node[right, font=\scriptsize]{Yes} (lrm);
+\draw[arr] (trm) |- (lrm);
+\draw[arr] (lrm) -- (erm); \draw[arr] (erm) -- (q2);
+\draw[arr] (q2) -- node[above, font=\scriptsize]{No} (tdpo);
+\draw[arr] (q2) -- node[right, font=\scriptsize]{Yes} (lpol);
+\draw[arr] (tdpo) |- (lpol);
+\draw[arr] (lpol) -- (demo); \draw[arr] (demo) -- (inter); \draw[arr] (inter) -- (en);
+\end{tikzpicture}
+\caption[Execution flowchart]{Execution flowchart with load-if-saved checkpoints for both models.}
+\label{fig:flowchart}
+\end{figure}
+
+\section{Mathematical Formulation}
+\label{sec:math}
+
+\subsection{Problem setting}
+Let $\mathcal{D} = \{(x^{(i)}, y_c^{(i)}, y_r^{(i)}, s^{(i)})\}_{i=1}^{N}$ be the combined preference dataset, where $x$ is a prompt, $y_c$ the response preferred by the annotator (chosen), $y_r$ the dispreferred response (rejected), and $s\in\{\textsc{hh}, \textsc{lmsys}\}$ the source tag. The tag is never shown to either model; it is used only for stratified splitting and per-source evaluation.
+
+\subsection{Reward model and the Bradley--Terry loss}
+The reward model $r_\phi(x,y)\in\mathbb{R}$ maps a prompt--response pair to a scalar score. Under the Bradley--Terry model~\cite{bradley1952rank}, the probability that $y_c$ is preferred over $y_r$ is
+\begin{equation}
+  P(y_c \succ y_r \mid x) \;=\; \frac{\exp(r_\phi(x,y_c))}{\exp(r_\phi(x,y_c)) + \exp(r_\phi(x,y_r))} \;=\; \sigma\big(r_\phi(x,y_c) - r_\phi(x,y_r)\big).
+  \label{eq:bt}
+\end{equation}
+Maximising the log-likelihood of the observed preferences gives the reward-model loss
+\begin{equation}
+  \mathcal{L}_{\mathrm{RM}}(\phi) \;=\; -\,\mathbb{E}_{(x,y_c,y_r)\sim\mathcal{D}}\Big[\log\sigma\big(r_\phi(x,y_c) - r_\phi(x,y_r)\big)\Big].
+  \label{eq:rmloss}
+\end{equation}
+When the two scores are equal, as they are at the start, the loss is exactly $\log 2 \approx 0.693$. This is the line to compare the training curves of Chapter~\ref{ch:results} against. Since only the \emph{difference} between the two scores enters the loss, adding a constant to every score changes nothing. That is why the average scores we report later are negative for chosen and rejected answers alike: the sign carries no meaning, and only the gap between them does.
+
+The gradient with respect to $\phi$ for one pair is
+\begin{equation}
+  \nabla_\phi\mathcal{L} = -\big(1-\sigma(\Delta r)\big)\big(\nabla_\phi r_\phi(x,y_c) - \nabla_\phi r_\phi(x,y_r)\big),\qquad \Delta r = r_\phi(x,y_c)-r_\phi(x,y_r),
+\end{equation}
+so pairs that the model already ranks correctly with a large margin contribute almost nothing, and wrongly ranked pairs contribute most.
+
+\subsection{KL-constrained reward maximisation}
+The policy-optimisation objective of RLHF~\cite{ziegler2019finetuning,ouyang2022instructgpt} is
+\begin{equation}
+  \max_{\pit}\ \mathbb{E}_{x\sim\mathcal{D},\,y\sim\pit(\cdot\mid x)}\big[r(x,y)\big] \;-\; \beta\,\mathbb{D}_{\mathrm{KL}}\big[\pit(\cdot\mid x)\,\big\|\,\piref(\cdot\mid x)\big],
+  \label{eq:klobj}
+\end{equation}
+where $\beta>0$ controls how far the policy may drift from the reference model $\piref$. Rafailov \emph{et al.}~\cite{rafailov2023dpo} show that the optimum of~\eqref{eq:klobj} is
+\begin{equation}
+  \pi^*(y\mid x) \;=\; \frac{1}{Z(x)}\,\piref(y\mid x)\exp\!\Big(\frac{1}{\beta}r(x,y)\Big),\qquad Z(x)=\sum_y \piref(y\mid x)\exp\!\Big(\frac{1}{\beta}r(x,y)\Big).
+  \label{eq:optpi}
+\end{equation}
+
+\subsection{Derivation of the DPO loss}
+Taking logarithms of~\eqref{eq:optpi} and rearranging expresses the reward in terms of the optimal policy:
+\begin{equation}
+  r(x,y) \;=\; \beta\log\frac{\pi^*(y\mid x)}{\piref(y\mid x)} \;+\; \beta\log Z(x).
+  \label{eq:reparam}
+\end{equation}
+Substituting~\eqref{eq:reparam} into the Bradley--Terry probability~\eqref{eq:bt}, the intractable partition function $Z(x)$ cancels because it appears in both terms of the difference:
+\begin{equation}
+  P(y_c\succ y_r\mid x) = \sigma\!\left(\beta\log\frac{\pi^*(y_c\mid x)}{\piref(y_c\mid x)} - \beta\log\frac{\pi^*(y_r\mid x)}{\piref(y_r\mid x)}\right).
+\end{equation}
+Replacing $\pi^*$ with the parameterised policy $\pit$ and maximising the likelihood gives the DPO objective
+\begin{equation}
+  \begin{split}
+  \mathcal{L}_{\mathrm{DPO}}(\theta) = -\,\mathbb{E}_{(x,y_c,y_r)\sim\mathcal{D}}\Bigg[\log\sigma\Bigg(&\beta\log\frac{\pit(y_c\mid x)}{\piref(y_c\mid x)}\\
+  &- \beta\log\frac{\pit(y_r\mid x)}{\piref(y_r\mid x)}\Bigg)\Bigg].
+  \end{split}
+  \label{eq:dpo}
+\end{equation}
+We call $\hat r_\theta(x,y) = \beta\log\frac{\pit(y\mid x)}{\piref(y\mid x)}$ the \emph{implicit reward}. During training, TRL records its average over chosen answers (\texttt{rewards/chosen}) and rejected answers (\texttt{rewards/rejected}), the gap between the two (\texttt{rewards/margins}), and the share of pairs where the gap is positive (\texttt{rewards/accuracies}). These four numbers are the training curves shown in Chapter~\ref{ch:results}.
+
+\subsection{Gradient of the DPO loss}
+The gradient of~\eqref{eq:dpo} is
+\begin{equation}
+  \nabla_\theta\mathcal{L}_{\mathrm{DPO}} = -\beta\,\mathbb{E}\Big[\underbrace{\sigma\big(\hat r_\theta(x,y_r)-\hat r_\theta(x,y_c)\big)}_{\text{weight: larger when ranking is wrong}}\big(\nabla_\theta\log\pit(y_c\mid x) - \nabla_\theta\log\pit(y_r\mid x)\big)\Big].
+\end{equation}
+In words, each step makes the chosen answer more likely and the rejected answer less likely, and pairs that the model currently gets wrong receive the largest push. Larger $\beta$ means a sharper sigmoid and a stronger pull back toward $\piref$.
+
+\subsection{Low-rank adaptation}
+For a frozen pre-trained weight $W_0\in\mathbb{R}^{d\times k}$, LoRA~\cite{hu2022lora} learns an update of rank $r\ll\min(d,k)$:
+\begin{equation}
+  h = W_0x + \Delta Wx = W_0x + \frac{\alpha}{r}BAx,\qquad B\in\mathbb{R}^{d\times r},\ A\in\mathbb{R}^{r\times k},
+  \label{eq:lora}
+\end{equation}
+$A$ starts with random values and $B$ starts at zero, so before any training the adapted layer behaves exactly like the original one. Each adapted matrix needs $r(d+k)$ new parameters instead of $dk$. For TinyLlama, which has hidden size 2048, 22 layers and 256-dimensional key and value projections, adapters of rank $r=16$ on the four attention projections add
+\[
+22\times16\times\big[(2048+2048)+2(2048+256)+(2048+2048)\big] = 4{,}505{,}600
+\]
+trainable parameters, about 0.41\% of the 1.1B total. With $r=32$ on the attention \emph{and} MLP projections (intermediate size 5632), the count rises to about 25.2M (2.3\%).
+
+\subsection{4-bit NormalFloat quantisation}
+In QLoRA~\cite{dettmers2023qlora} the frozen weights are kept in the 4-bit NormalFloat (NF4) format. The weights are cut into blocks of 64; each block is divided by its largest absolute value, and every number is rounded to one of 16 levels chosen so that normally distributed values are covered evenly. Double quantisation applies the same trick to the per-block scale factors and saves roughly another 0.37 bits per weight. When a layer runs, its weights are expanded back to the compute type, which is FP16 for us because the T4 has no BF16 support. Only the LoRA matrices receive gradients, and they stay in higher precision.
+
+\subsection{Memory budget}
+Table~\ref{tab:memory} shows roughly how much GPU memory each option would need for DPO training of the policy. It makes clear why we needed NF4, LoRA and a paged 8-bit optimiser together to stay inside 16\,GB.
+
+\begin{table}[!htbp]
+\centering
+\caption[GPU memory needed for DPO training]{Approximate GPU memory needed for DPO training of TinyLlama-1.1B under different configurations (weights + gradients + optimiser state, excluding activations).}
+\label{tab:memory}
+\small
+\begin{tabularx}{\textwidth}{@{}YC{1.9cm}C{2.3cm}C{2.2cm}@{}}
+\toprule
+\textbf{Configuration} & \textbf{Weights} & \textbf{Grad.\ + optimiser} & \textbf{Approx.\ total}\\
+\midrule
+Full fine-tuning, FP32 + Adam (policy + reference) & 8.8 GB & 13.2 GB & $\approx$ 22 GB\\
+Full fine-tuning, FP16 weights, FP32 Adam & 4.4 GB & 13.2 GB & $\approx$ 17.6 GB\\
+LoRA ($r$=16), FP16 base & 2.2 GB & $<$0.1 GB & $\approx$ 2.3 GB\\
+\textbf{LoRA ($r$=16), NF4 base, paged 8-bit AdamW (used)} & \textbf{$\approx$0.7 GB} & \textbf{$<$0.05 GB} & \textbf{$\approx$ 1.1 GB\textsuperscript{*}}\\
+\bottomrule
+\end{tabularx}\\[2pt]
+{\footnotesize\textsuperscript{*}Measured: 1.14 GB allocated after loading the 4-bit policy (notebook output). With PEFT, the reference model is obtained by disabling the adapters, so no second copy of the weights is needed.}
+\end{table}
+
+\section{Model Architectures}
+\label{sec:models}
+
+\subsection{Reward model: DeBERTa-v3-base with a scalar head}
+The reward model (Figure~\ref{fig:rmarch}) reads the prompt and the response as a pair of sentences, [CLS] prompt [SEP] response [SEP], cut to 512 tokens. DeBERTa-v3-base has 12 layers with hidden size 768 and 12 attention heads, and about 184M parameters in total, a large share of them in its 128K-entry word table. The output vector at the [CLS] position goes through a pooler (a $768\to768$ dense layer) and then a linear layer $768\to1$ whose output is the reward.
+
+We add LoRA adapters to the query, key and value projections in every layer. PEFT trains the final classifier automatically for this task type, and we also list the pooler under \texttt{modules\_to\_save}. Without that line the pooler was never saved, which broke reloading; Section~\ref{sec:impl-fixes} tells the full story.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+  box/.style={draw, thick, rounded corners=3pt, text width=8.4cm, minimum height=0.8cm, align=center, font=\footnotesize},
+  arr/.style={-{Stealth[length=2.2mm]}, thick},
+  lora/.style={draw, thick, dashed, rounded corners=3pt, fill=igdtuworange!20, font=\scriptsize, align=center, text width=2.6cm}]
+\node[box, fill=boxA] (in) at (0,0) {Input: [CLS] \textit{prompt} [SEP] \textit{response} [SEP] \quad ($\le$512 tokens)};
+\node[box, fill=white] (emb) at (0,-1.2) {Token embeddings (128K vocabulary, $d$=768) -- frozen};
+\node[box, fill=boxB, minimum height=1.3cm] (enc) at (0,-2.75) {12 $\times$ DeBERTa layer: disentangled self-attention (content + relative position) + feed-forward -- base weights frozen};
+\node[lora] (lo) at (6.5,-2.75) {LoRA on query\_proj, key\_proj, value\_proj (trainable)};
+\node[box, fill=boxC] (pool) at (0,-4.45) {Pooler: dense 768$\to$768 on [CLS] -- \textbf{trainable (modules\_to\_save)}};
+\node[box, fill=boxD] (head) at (0,-5.7) {Classifier: linear 768$\to$1 -- trainable};
+\node[box, fill=boxE] (out) at (0,-6.9) {Scalar reward $r_\phi(x,y)$};
+\draw[arr] (in) -- (emb); \draw[arr] (emb) -- (enc); \draw[arr] (enc) -- (pool); \draw[arr] (pool) -- (head); \draw[arr] (head) -- (out);
+\draw[thick, dashed, igdtuworange] (lo) -- (enc);
+\end{tikzpicture}
+\caption[Reward-model architecture]{Reward-model architecture: DeBERTa-v3-base encoder with LoRA adapters, a trainable pooler and a scalar head.}
+\label{fig:rmarch}
+\end{figure}
+
+\subsection{Policy model: TinyLlama-1.1B-Chat with LoRA}
+The policy (Figure~\ref{fig:polarch}) follows the Llama design: 22 decoder layers of width 2048, 32 query heads sharing 4 key/value heads, SwiGLU feed-forward blocks of width 5632, rotary position encoding and a 32K-token vocabulary. Its weights stay frozen in NF4. LoRA adapters sit on the $q$, $k$, $v$ and $o$ projections, and configuration B adds them to the gate, up and down projections of the feed-forward blocks as well. Every prompt is placed inside the model's chat template (\texttt{<|user|>} \ldots \texttt{<|assistant|>}) both in training and when generating.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+  box/.style={draw, thick, rounded corners=3pt, text width=8.0cm, minimum height=0.75cm, align=center, font=\footnotesize},
+  inner/.style={draw, fill=white, text width=7.0cm, minimum height=0.6cm, align=center, font=\scriptsize},
+  arr/.style={-{Stealth[length=2.2mm]}, thick},
+  lora/.style={draw, thick, dashed, rounded corners=3pt, fill=igdtuworange!20, font=\scriptsize, align=center, text width=2.7cm}]
+\node[box, fill=boxA] (in) at (0,0) {Chat template: \texttt{<|user|>} prompt \texttt{<|assistant|>}};
+\node[box] (emb) at (0,-1.1) {Token embedding (32K $\times$ 2048)};
+\node[box, fill=boxB, minimum height=2.3cm] (blk) at (0,-2.95) {};
+\node[font=\footnotesize\bfseries] at (0,-2.1) {22 $\times$ decoder block (NF4, frozen)};
+\node[inner] (att) at (0,-2.8) {RMSNorm $\rightarrow$ grouped-query self-attention + RoPE};
+\node[inner] (mlp) at (0,-3.6) {RMSNorm $\rightarrow$ SwiGLU MLP (2048 $\to$ 5632 $\to$ 2048)};
+\node[lora] (l1) at (6.6,-2.3) {LoRA $r$=16 on $q,k,v,o$ (config.\ A)};
+\node[lora] (l2) at (6.6,-3.7) {LoRA $r$=32 on $q,k,v,o$ + gate, up, down (config.\ B)};
+\node[box] (lm) at (0,-5.0) {RMSNorm $\rightarrow$ LM head $\rightarrow$ next-token distribution $\pi_\theta(\cdot|x)$};
+\draw[arr] (in) -- (emb); \draw[arr] (emb) -- (blk); \draw[arr] (blk) -- (lm);
+\draw[thick, dashed, igdtuworange] (l1.west) -- (att.east);
+\draw[thick, dashed, igdtuworange] (l2.west) -- (mlp.east);
+\end{tikzpicture}
+\caption[Policy-model architecture]{Policy architecture: 4-bit TinyLlama-1.1B-Chat with LoRA adapters. The reference policy $\piref$ is the same network with adapters disabled.}
+\label{fig:polarch}
+\end{figure}
+
+\subsection{PPO vs.\ DPO training loops}
+Figure~\ref{fig:ppovsdpo} compares what has to sit in GPU memory under PPO and under DPO. This difference was the deciding factor for us.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+  m/.style={draw, thick, rounded corners=3pt, minimum width=2.4cm, minimum height=0.85cm, align=center, font=\scriptsize},
+  arr/.style={-{Stealth[length=2mm]}, thick},
+  title/.style={font=\small\bfseries}]
+\node[title] at (0,2.2) {PPO-based RLHF (4 models + sampling)};
+\node[m, fill=boxB] (pp) at (-1.5,1.1) {Policy $\pit$\\(trainable)};
+\node[m, fill=white] (pr) at (1.5,1.1) {Reference $\piref$\\(frozen)};
+\node[m, fill=boxC] (prm) at (-1.5,-0.4) {Reward model\\(frozen)};
+\node[m, fill=boxD] (pv) at (1.5,-0.4) {Value / critic\\(trainable)};
+\node[font=\scriptsize, align=center] at (0,-1.45) {generate $y\sim\pit$ $\rightarrow$ score $\rightarrow$ advantage $\rightarrow$ clipped update};
+\begin{scope}[xshift=7.6cm]
+\node[title] at (0,2.2) {DPO (2 models, no sampling)};
+\node[m, fill=boxB] (dp) at (-1.5,1.1) {Policy $\pit$\\(LoRA, trainable)};
+\node[m, fill=white] (dr) at (1.5,1.1) {Reference $\piref$\\(adapters off)};
+\node[m, fill=boxA, minimum width=5.4cm] (dd) at (0,-0.4) {Static pairs $(x, y_c, y_r)$ from $\mathcal{D}$};
+\node[font=\scriptsize, align=center] at (0,-1.45) {log-prob ratios $\rightarrow$ logistic loss~\eqref{eq:dpo} $\rightarrow$ gradient step};
+\draw[arr] (dd.north) ++(-1.5,0) -- (dp.south);
+\draw[arr] (dd.north) ++(1.5,0) -- (dr.south);
+\end{scope}
+\draw[arr] (pp) -- (prm); \draw[arr] (pp) -- (pr); \draw[arr] (prm) -- (pv);
+\draw[thick, dashed, black!40] (3.8,2.4) -- (3.8,-1.8);
+\end{tikzpicture}
+\caption[Models in memory: PPO vs.\ DPO]{Models resident in memory during PPO-based RLHF vs.\ DPO.}
+\label{fig:ppovsdpo}
+\end{figure}
+
+\section{Datasets}
+\label{sec:datasets}
+
+\subsection{Anthropic HH-RLHF (helpful-base)}
+Every HH-RLHF row has a \texttt{chosen} and a \texttt{rejected} field. Each is a whole conversation written as \verb|\n\nHuman: ... \n\nAssistant: ...|, sometimes with several turns, and the two copies are identical except for the last assistant reply. The helpful-base training file contains 43,835 rows.
+
+\subsection{LMSYS Chatbot Arena (Kaggle \texttt{train.csv})}
+The LMSYS file has 57,477 rows. Each row stores an \texttt{id}, the two model names (\texttt{model\_a}, \texttt{model\_b}), the conversation as JSON lists (\texttt{prompt}, \texttt{response\_a}, \texttt{response\_b}, one entry per turn) and three columns of 0/1 flags: \texttt{winner\_model\_a}, \texttt{winner\_model\_b} and \texttt{winner\_tie}. 17,761 rows (30.9\%) are ties.
+
+\subsection{Common schema and source statistics}
+Both datasets are converted to the schema
+\begin{center}
+\texttt{\{prompt: str, chosen: str, rejected: str, source: "hh\_rlhf" | "lmsys"\}}
+\end{center}
+Table~\ref{tab:datastats} traces the number of records through each stage, as printed by the notebooks.
+
+\begin{table}[!htbp]
+\centering
+\caption[Record counts through data preparation]{Record counts through the data-preparation pipeline (from notebook output).}
+\label{tab:datastats}
+\small
+\begin{tabular}{@{}lrr@{}}
+\toprule
+\textbf{Stage} & \textbf{HH-RLHF} & \textbf{LMSYS}\\
+\midrule
+Raw rows loaded & 43,835 & 57,477\\
+Ties dropped & -- & 17,761\\
+Valid after parsing & 43,783 & 39,678\\
+After truncate-and-filter (1,500 / 20 chars) & 40,502 & 36,452\\
+\midrule
+Sampled -- configuration A (balanced) & 2,000 & 2,000\\
+Sampled -- configuration B (HH-weighted) & 6,000 & 2,000\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Splitting strategy}
+We split each source on its own, 87.5\% for training, 6.25\% for validation and 6.25\% for testing, and then join and shuffle the pieces. This keeps the source mix the same in every split and makes sure no row appears in two splits. An early version of our code did take validation and test rows from overlapping slices, and we corrected it. Table~\ref{tab:splits} lists the sizes.
+
+\begin{table}[!htbp]
+\centering
+\caption[Split sizes]{Stratified split sizes for the two experimental configurations.}
+\label{tab:splits}
+\small
+\begin{tabular}{@{}lccc@{}}
+\toprule
+\textbf{Configuration} & \textbf{Train} & \textbf{Validation} & \textbf{Test}\\
+\midrule
+A: 2K HH + 2K LMSYS & 3,500 (1,750 / 1,750) & 250 (125 / 125) & 250 (125 / 125)\\
+B: 6K HH + 2K LMSYS & 7,000 (5,250 / 1,750) & 500 (375 / 125) & 500 (375 / 125)\\
+\bottomrule
+\end{tabular}\\[2pt]
+{\footnotesize Numbers in parentheses are HH-RLHF / LMSYS.}
+\end{table}
+
+\section{Evaluation Metrics}
+\label{sec:metrics}
+
+\paragraph{Pairwise accuracy (reward model).} For a test set $\mathcal{T}$,
+\begin{equation}
+  \mathrm{Acc}_{\mathrm{RM}} = \frac{1}{|\mathcal{T}|}\sum_{(x,y_c,y_r)\in\mathcal{T}}\mathbf{1}\big[r_\phi(x,y_c) > r_\phi(x,y_r)\big],
+\end{equation}
+computed overall and separately on $\mathcal{T}_{\textsc{hh}}$ and $\mathcal{T}_{\textsc{lmsys}}$. Random guessing gives 50\%.
+
+\paragraph{Mean reward gap.} $\overline{\Delta r} = \frac{1}{|\mathcal{T}|}\sum\big(r_\phi(x,y_c)-r_\phi(x,y_r)\big)$, a confidence-weighted complement to accuracy.
+
+\paragraph{Cross-distribution balance criterion.} The reward model is considered \emph{balanced} if $|\mathrm{Acc}_{\textsc{hh}} - \mathrm{Acc}_{\textsc{lmsys}}| < 10$ percentage points.
+
+\paragraph{DPO win rate.} For a set of prompts $\mathcal{P}$, with $y^{\text{base}}$ and $y^{\text{dpo}}$ sampled from the base and aligned policies,
+\begin{equation}
+  \mathrm{WR} = \frac{1}{|\mathcal{P}|}\sum_{x\in\mathcal{P}}\mathbf{1}\big[r_\phi(x,y^{\text{dpo}}) > r_\phi(x,y^{\text{base}})\big],\qquad \overline{\Delta} = \frac{1}{|\mathcal{P}|}\sum_{x\in\mathcal{P}}\big(r_\phi(x,y^{\text{dpo}}) - r_\phi(x,y^{\text{base}})\big).
+\end{equation}
+
+\paragraph{DPO training diagnostics.} Implicit-reward accuracy and margin on training batches (Section~\ref{sec:math}), and DPO loss (reference level $\log 2$).
+
+\section{Technologies and Tools}
+\label{sec:tools}
+
+\begin{table}[!htbp]
+\centering
+\caption[Software stack]{Software stack (versions as printed by the Kaggle notebook; the laptop uses newer releases).}
+\label{tab:software}
+\small
+\begin{tabularx}{\textwidth}{@{}L{2.9cm}L{3.2cm}Y@{}}
+\toprule
+\textbf{Component} & \textbf{Version} & \textbf{Role}\\
+\midrule
+Python & 3.x (Kaggle image) & Implementation language\\
+PyTorch~\cite{paszke2019pytorch} & 2.10.0 + CUDA 12.8 & Tensor computation, autograd\\
+Transformers~\cite{wolf2020transformers} & 5.8.1 & Model loading, tokenisers, generation\\
+TRL~\cite{vonwerra2020trl} & 1.4.0 & \texttt{RewardTrainer}, \texttt{DPOTrainer}\\
+PEFT~\cite{mangrulkar2022peft} & 0.19.1 & LoRA adapters, \texttt{modules\_to\_save}\\
+bitsandbytes & 0.49.2 & NF4 quantisation, paged 8-bit AdamW\\
+torchao & 0.17.0 & Required by recent PEFT\\
+Datasets & latest & HH-RLHF download, \texttt{Dataset} objects\\
+pandas / NumPy & latest & Tabular processing, metrics\\
+Matplotlib / Seaborn & latest & Plots\\
+Kaggle Notebooks & free tier & Execution environment\\
+Gradio & 6.x & Local web application for live comparison\\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\begin{table}[!htbp]
+\centering
+\caption[Hardware configuration]{Hardware used for training and for the system run.}
+\label{tab:hardware}
+\small
+\begin{tabularx}{\textwidth}{@{}L{3.6cm}Y@{}}
+\toprule
+\textbf{Component} & \textbf{Specification}\\
+\midrule
+GPU & 2 $\times$ NVIDIA Tesla T4 (15.6 GB usable VRAM each)\\
+GPU driver / CUDA & 580.105.08 / CUDA 13.0 runtime\\
+Precision support & FP32, FP16 (no native BF16 arithmetic)\\
+Platform & Kaggle Notebooks, free tier, internet enabled\\
+Persistence & \texttt{/kaggle/working} (cleared each session) + saved notebook outputs\\
+\midrule
+Laptop (system run) & Apple M1, 8 GB unified memory, PyTorch MPS backend, FP16 policy\\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\section{Key Design Decisions}
+\label{sec:design-choices}
+
+\begin{table}[!htbp]
+\centering
+\caption[Key design choices]{Key design choices and their justification.}
+\label{tab:design}
+\small
+\begin{tabularx}{\textwidth}{@{}L{2.2cm}L{3.2cm}L{2.7cm}Y@{}}
+\toprule
+\textbf{Decision} & \textbf{This work} & \textbf{Alternative} & \textbf{Rationale}\\
+\midrule
+RM backbone & DeBERTa-v3-base (bidirectional) & TinyLlama-1.1B (causal) & Bidirectional attention suits scoring complete sequences; 6$\times$ smaller; the first prototype used TinyLlama and was replaced\\
+RM precision & FP32, no quantisation & FP16 / 4-bit & DeBERTa-v3 produced NaN scores in FP16; 184M parameters fit in FP32\\
+Policy & TinyLlama-1.1B-Chat & GPT-2 (124M) & Coherent chat ability; DPO effect observable; fits on T4\\
+Alignment & DPO & PPO & 2 models vs.\ 4; no online sampling; stable\\
+Long examples & Truncate at 1,500 chars & Reject & Preserves LMSYS multi-turn diversity; limits length bias\\
+LMSYS ties & Dropped & Keep as weak label & Ties carry no pairwise signal\\
+Multi-turn LMSYS & Final user turn only & Concatenate turns & Avoids mixing in the \emph{other} model's earlier answers\\
+Split & Stratified by source & Random & Both regimes in every split; enables per-source metrics\\
+Evaluation & RM as proxy judge & Human / GPT-4 & Feasible on free tier; circularity acknowledged\\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\section{Summary}
+To sum up, we described the four stages, the data flow at three levels and the order of a run. We derived the reward-model loss from the Bradley--Terry model and the DPO loss from the KL-limited RLHF objective, worked out how much LoRA and NF4 save, and described both models, the data, the splits, the measures and the tools. Chapter~\ref{ch:impl} turns this design into code.

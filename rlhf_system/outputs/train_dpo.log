@@ -1,0 +1,82 @@
+W1112 14:30:57.761000 68737 .venv/lib/python3.13/site-packages/torch/distributed/elastic/multiprocessing/redirects.py:35] NOTE: Redirects are currently not supported in MacOs.
+[transformers] `torch_dtype` is deprecated! Use `dtype` instead!
+Config local -> outputs/config_local
+[data] Using cached splits in outputs/config_local
+[dpo] WARNING: no CUDA GPU - training without 4-bit quantisation will be very slow
+Loading weights:   0%|          | 0/201 [00:00<?, ?it/s]Loading weights:   0%|          | 1/201 [00:00<01:05,  3.05it/s]Loading weights:  18%|█▊        | 37/201 [00:00<00:01, 110.59it/s]Loading weights:  29%|██▉       | 58/201 [00:00<00:01, 110.92it/s]Loading weights:  38%|███▊      | 76/201 [00:00<00:01, 120.71it/s]Loading weights:  47%|████▋     | 94/201 [00:00<00:00, 126.71it/s]Loading weights:  56%|█████▌    | 112/201 [00:01<00:00, 128.86it/s]Loading weights:  65%|██████▍   | 130/201 [00:01<00:00, 122.34it/s]Loading weights:  72%|███████▏  | 144/201 [00:01<00:00, 85.42it/s] Loading weights:  77%|███████▋  | 155/201 [00:01<00:00, 89.94it/s]Loading weights:  83%|████████▎ | 166/201 [00:01<00:00, 78.90it/s]Loading weights:  92%|█████████▏| 184/201 [00:01<00:00, 85.09it/s]Loading weights:  97%|█████████▋| 194/201 [00:02<00:00, 87.24it/s]Loading weights: 100%|██████████| 201/201 [00:02<00:00, 97.68it/s]
+[dpo] train 400 {'hh_rlhf': 210, 'lmsys': 190} | val 60
+Map:   0%|          | 0/400 [00:00<?, ? examples/s]Map: 100%|██████████| 400/400 [00:00<00:00, 12107.66 examples/s]
+Map:   0%|          | 0/60 [00:00<?, ? examples/s]Map: 100%|██████████| 60/60 [00:00<00:00, 16620.98 examples/s]
+Adding EOS to train dataset:   0%|          | 0/400 [00:00<?, ? examples/s]Adding EOS to train dataset: 100%|██████████| 400/400 [00:00<00:00, 46565.87 examples/s]
+Tokenizing train dataset:   0%|          | 0/400 [00:00<?, ? examples/s]Tokenizing train dataset:  45%|████▌     | 181/400 [00:00<00:00, 1788.47 examples/s]Tokenizing train dataset: 100%|██████████| 400/400 [00:00<00:00, 1544.24 examples/s]Tokenizing train dataset: 100%|██████████| 400/400 [00:00<00:00, 1568.81 examples/s]
+Dropping fully truncated examples from train dataset:   0%|          | 0/400 [00:00<?, ? examples/s]Dropping fully truncated examples from train dataset: 100%|██████████| 400/400 [00:00<00:00, 61910.83 examples/s]
+Adding EOS to eval dataset:   0%|          | 0/60 [00:00<?, ? examples/s]Adding EOS to eval dataset: 100%|██████████| 60/60 [00:00<00:00, 32140.26 examples/s]
+Tokenizing eval dataset:   0%|          | 0/60 [00:00<?, ? examples/s]Tokenizing eval dataset: 100%|██████████| 60/60 [00:00<00:00, 1717.44 examples/s]
+Dropping fully truncated examples from eval dataset:   0%|          | 0/60 [00:00<?, ? examples/s]Dropping fully truncated examples from eval dataset: 100%|██████████| 60/60 [00:00<00:00, 37786.52 examples/s]
+  0%|          | 0/43 [00:00<?, ?it/s]/Users/vamikabhardwaj/Desktop/minor project/rlhf_system/.venv/lib/python3.13/site-packages/torch/utils/data/dataloader.py:759: UserWarning: 'pin_memory' argument is set as true but not supported on MPS now, device pinned memory won't be used.
+  super().__init__(loader)
+  2%|▏         | 1/43 [00:35<24:37, 35.17s/it]  5%|▍         | 2/43 [01:04<21:38, 31.68s/it]  7%|▋         | 3/43 [01:31<19:34, 29.36s/it]  9%|▉         | 4/43 [02:01<19:18, 29.71s/it] 12%|█▏        | 5/43 [02:33<19:23, 30.62s/it] 14%|█▍        | 6/43 [03:09<19:56, 32.34s/it] 16%|█▋        | 7/43 [03:39<19:06, 31.84s/it] 19%|█▊        | 8/43 [04:13<18:55, 32.44s/it] 21%|██        | 9/43 [04:52<19:30, 34.44s/it] 23%|██▎       | 10/43 [05:24<18:29, 33.61s/it] 26%|██▌       | 11/43 [05:56<17:44, 33.27s/it] 28%|██▊       | 12/43 [06:29<17:01, 32.95s/it] 30%|███       | 13/43 [07:01<16:25, 32.85s/it] 33%|███▎      | 14/43 [07:29<15:06, 31.27s/it] 35%|███▍      | 15/43 [07:50<13:11, 28.28s/it] 37%|███▋      | 16/43 [08:20<12:59, 28.88s/it] 40%|███▉      | 17/43 [08:45<12:00, 27.73s/it] 42%|████▏     | 18/43 [09:10<11:12, 26.90s/it] 44%|████▍     | 19/43 [09:39<10:57, 27.41s/it] 47%|████▋     | 20/43 [10:07<10:31, 27.46s/it]                                                47%|████▋     | 20/43 [10:07<10:31, 27.46s/it] 49%|████▉     | 21/43 [10:34<10:05, 27.51s/it] 51%|█████     | 22/43 [11:00<09:29, 27.13s/it] 53%|█████▎    | 23/43 [11:26<08:53, 26.69s/it] 56%|█████▌    | 24/43 [11:51<08:18, 26.23s/it] 58%|█████▊    | 25/43 [12:15<07:36, 25.37s/it] 60%|██████    | 26/43 [12:42<07:23, 26.10s/it] 63%|██████▎   | 27/43 [13:05<06:39, 24.97s/it] 65%|██████▌   | 28/43 [13:31<06:18, 25.22s/it] 67%|██████▋   | 29/43 [13:52<05:35, 23.95s/it] 70%|██████▉   | 30/43 [14:18<05:20, 24.63s/it] 72%|███████▏  | 31/43 [14:47<05:12, 26.04s/it] 74%|███████▍  | 32/43 [15:12<04:44, 25.84s/it] 77%|███████▋  | 33/43 [15:38<04:18, 25.87s/it] 79%|███████▉  | 34/43 [15:57<03:33, 23.76s/it] 81%|████████▏ | 35/43 [16:17<03:00, 22.54s/it] 84%|████████▎ | 36/43 [16:49<02:57, 25.29s/it] 86%|████████▌ | 37/43 [17:18<02:38, 26.42s/it] 88%|████████▊ | 38/43 [17:45<02:13, 26.74s/it] 91%|█████████ | 39/43 [18:15<01:50, 27.59s/it] 93%|█████████▎| 40/43 [18:50<01:29, 29.96s/it]                                                93%|█████████▎| 40/43 [18:50<01:29, 29.96s/it] 95%|█████████▌| 41/43 [19:16<00:57, 28.74s/it] 98%|█████████▊| 42/43 [19:48<00:29, 29.60s/it]100%|██████████| 43/43 [20:08<00:00, 26.79s/it]{'loss': '0.6915', 'grad_norm': '5.943', 'learning_rate': '3.504e-05', 'entropy': '1.426', 'num_tokens': '5.935e+04', 'logits/chosen': '-3.311', 'logits/rejected': '-3.322', 'mean_token_accuracy': '0.576', 'rewards/chosen': '0.002753', 'rewards/rejected': '-0.00347', 'rewards/accuracies': '0.5312', 'rewards/margins': '0.006223', 'logps/chosen': '-173.3', 'logps/rejected': '-163.7', 'epoch': '0.4665'}
+{'loss': '0.6929', 'grad_norm': '7.557', 'learning_rate': '1.355e-06', 'entropy': '1.411', 'num_tokens': '1.199e+05', 'logits/chosen': '-3.37', 'logits/rejected': '-3.384', 'mean_token_accuracy': '0.5767', 'rewards/chosen': '-0.09073', 'rewards/rejected': '-0.09484', 'rewards/accuracies': '0.5062', 'rewards/margins': '0.004109', 'logps/chosen': '-178.7', 'logps/rejected': '-157.8', 'epoch': '0.9329'}
+
+  0%|          | 0/55 [00:00<?, ?it/s][A
+  4%|▎         | 2/55 [00:01<00:33,  1.60it/s][A
+  5%|▌         | 3/55 [00:02<00:56,  1.08s/it][A
+  7%|▋         | 4/55 [00:04<00:56,  1.10s/it][A
+  9%|▉         | 5/55 [00:05<00:58,  1.18s/it][A
+ 11%|█         | 6/55 [00:07<01:10,  1.44s/it][A
+ 13%|█▎        | 7/55 [00:09<01:17,  1.62s/it][A
+ 15%|█▍        | 8/55 [00:11<01:22,  1.75s/it][A
+ 16%|█▋        | 9/55 [00:12<01:07,  1.48s/it][A
+ 18%|█▊        | 10/55 [00:13<01:04,  1.42s/it][A
+ 20%|██        | 11/55 [00:15<01:08,  1.56s/it][A
+ 22%|██▏       | 12/55 [00:16<00:59,  1.39s/it][A
+ 24%|██▎       | 13/55 [00:18<01:05,  1.56s/it][A
+ 25%|██▌       | 14/55 [00:20<01:09,  1.70s/it][A
+ 27%|██▋       | 15/55 [00:21<01:05,  1.63s/it][A
+ 29%|██▉       | 16/55 [00:23<01:07,  1.73s/it][A
+ 31%|███       | 17/55 [00:25<00:59,  1.55s/it][A
+ 33%|███▎      | 18/55 [00:26<01:01,  1.66s/it][A
+ 35%|███▍      | 19/55 [00:28<01:02,  1.74s/it][A
+ 36%|███▋      | 20/55 [00:30<00:56,  1.61s/it][A
+ 38%|███▊      | 21/55 [00:32<00:57,  1.70s/it][A
+ 40%|████      | 22/55 [00:32<00:48,  1.46s/it][A
+ 42%|████▏     | 23/55 [00:34<00:43,  1.36s/it][A
+ 44%|████▎     | 24/55 [00:36<00:47,  1.53s/it][A
+ 45%|████▌     | 25/55 [00:37<00:49,  1.65s/it][A
+ 47%|████▋     | 26/55 [00:39<00:42,  1.47s/it][A
+ 49%|████▉     | 27/55 [00:40<00:39,  1.42s/it][A
+ 51%|█████     | 28/55 [00:42<00:41,  1.54s/it][A
+ 53%|█████▎    | 29/55 [00:44<00:43,  1.66s/it][A
+ 55%|█████▍    | 30/55 [00:46<00:44,  1.77s/it][A
+ 56%|█████▋    | 31/55 [00:48<00:44,  1.83s/it][A
+ 58%|█████▊    | 32/55 [00:49<00:37,  1.61s/it][A
+ 60%|██████    | 33/55 [00:51<00:37,  1.68s/it][A
+ 62%|██████▏   | 34/55 [00:52<00:36,  1.75s/it][A
+ 64%|██████▎   | 35/55 [00:54<00:34,  1.71s/it][A
+ 65%|██████▌   | 36/55 [00:55<00:29,  1.54s/it][A
+ 67%|██████▋   | 37/55 [00:57<00:29,  1.64s/it][A
+ 69%|██████▉   | 38/55 [00:58<00:26,  1.56s/it][A
+ 71%|███████   | 39/55 [01:00<00:25,  1.61s/it][A
+ 73%|███████▎  | 40/55 [01:01<00:20,  1.38s/it][A
+ 75%|███████▍  | 41/55 [01:03<00:21,  1.53s/it][A
+ 76%|███████▋  | 42/55 [01:05<00:21,  1.67s/it][A
+ 78%|███████▊  | 43/55 [01:07<00:21,  1.77s/it][A
+ 80%|████████  | 44/55 [01:08<00:17,  1.61s/it][A
+ 82%|████████▏ | 45/55 [01:10<00:16,  1.65s/it][A
+ 84%|████████▎ | 46/55 [01:11<00:13,  1.46s/it][A
+ 85%|████████▌ | 47/55 [01:13<00:13,  1.63s/it][A
+ 87%|████████▋ | 48/55 [01:14<00:11,  1.61s/it][A
+ 89%|████████▉ | 49/55 [01:16<00:09,  1.59s/it][A
+ 91%|█████████ | 50/55 [01:17<00:06,  1.29s/it][A
+ 93%|█████████▎| 51/55 [01:18<00:04,  1.24s/it][A
+ 95%|█████████▍| 52/55 [01:19<00:03,  1.20s/it][A
+ 96%|█████████▋| 53/55 [01:21<00:02,  1.44s/it][A
+ 98%|█████████▊| 54/55 [01:23<00:01,  1.64s/it][A
+100%|██████████| 55/55 [01:25<00:00,  1.80s/it][A                                               
+                                               [A100%|██████████| 43/43 [21:35<00:00, 26.79s/it]
+100%|██████████| 55/55 [01:25<00:00,  1.80s/it][A
+                                               [A                                               100%|██████████| 43/43 [21:35<00:00, 26.79s/it]100%|██████████| 43/43 [21:35<00:00, 30.12s/it]
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+{'eval_loss': '0.6837', 'eval_runtime': '86.79', 'eval_samples_per_second': '0.634', 'eval_steps_per_second': '0.634', 'eval_entropy': '1.38', 'eval_num_tokens': '1.278e+05', 'eval_logits/chosen': '-3.396', 'eval_logits/rejected': '-3.316', 'eval_mean_token_accuracy': '0.5742', 'eval_rewards/chosen': '-0.08577', 'eval_rewards/rejected': '-0.1102', 'eval_rewards/accuracies': '0.5636', 'eval_rewards/margins': '0.02445', 'eval_logps/chosen': '-146.5', 'eval_logps/rejected': '-134.9', 'epoch': '1'}
+{'train_runtime': '1295', 'train_samples_per_second': '0.265', 'train_steps_per_second': '0.033', 'train_loss': '0.6917', 'epoch': '1'}
+[dpo] saved to outputs/config_local/finetuned_llm

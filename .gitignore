@@ -1,0 +1,29 @@
+# OS / editor
+.DS_Store
+.claude/
+__pycache__/
+*.pyc
+
+# Python environment and big data (re-downloaded by the pipeline)
+rlhf_system/.venv/
+rlhf_system/data/
+rlhf_system/outputs/**/rm_checkpoints/
+rlhf_system/outputs/**/dpo_checkpoints/
+
+# LaTeX build files
+RLHF_Minor_Report/*.aux
+RLHF_Minor_Report/*.log
+RLHF_Minor_Report/*.out
+RLHF_Minor_Report/*.toc
+RLHF_Minor_Report/*.lof
+RLHF_Minor_Report/*.lot
+RLHF_Minor_Report/*.lol
+RLHF_Minor_Report/*.bbl
+RLHF_Minor_Report/*.blg
+RLHF_Minor_Report/*.fls
+RLHF_Minor_Report/*.fdb_latexmk
+RLHF_Minor_Report/*.synctex.gz
+RLHF_Minor_Report/main.pdf
+
+# Per-person plagiarism-check splits (regenerated from the report)
+Plag_Check_Parts/

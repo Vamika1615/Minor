@@ -1,0 +1,155 @@
+ Running 5-prompt demo reel...
+
+
+vvv Demo 1/5 vvv
+==============================================================================
+ PROMPT: What is neural network?
+==============================================================================
+
+ BEFORE TRAINING (Base TinyLlama):
+   Reward Score: +0.1236
+   Response: Neural networks are a type of artificial intelligence (AI) that can learn and adapt to new data by simulating the functions of biological neurons. They are composed of a large number of interconnected nodes, each with its own weight and activation function. The weights represent the connections between nodes, while the activation functions determine how those connections are used to generate an output based on input. 
+
+In a neural network, each layer consists of several sub-networks that work together to solve a problem. Each layer adds more complex mathematical functions to the overall algorithm, allowing the network to generalize better over new inputs. This process is called backpropagation, which involves updating the weights in each layer as the network learns from the errors it makes.
+
+The concept of neural network dates back to the 1940s when researchers at the Institute for Advanced Study in Princeton, New Jersey, developed a model known as the perceptron. It was
+
+ AFTER TRAINING (DPO-Aligned TinyLlama):
+   Reward Score: +0.1224
+   Response: Neural Networks (NN) are a type of artificial intelligence algorithm that simulates the way human brains work. They consist of interconnected neurons or nodes, which receive input from other neurons and output a result based on an incoming input.  Neurons can be considered as computational elements that can process information, perform calculations and communicate with each other. NN use this mechanism to solve problems by identifying patterns and making predictions in complex data sets.
+
+In simpler terms, a neural network consists of layers of nodes connected by connections called neurons. The first layer (input layer) receives inputs from sensors or other sources, while the last layer sends outputs back to the input layer for processing. This process repeats iteratively until the final output is obtained.
+
+Neural networks have many applications, including:
+- Image recognition
+- Spoken language translation
+- Computer vision tasks such as object detection, classification, and segmentation
+- Financial
+
+  Base model scored higher this turn (Delta = -0.0012)
+    Note: due to sampling, individual prompts may favor either model;
+    the AVERAGE over many prompts is what shows DPO's effect.
+==============================================================================
+
+vvv Demo 2/5 vvv
+==============================================================================
+ PROMPT: Explain neural networks simply.
+==============================================================================
+
+ BEFORE TRAINING (Base TinyLlama):
+   Reward Score: +0.0928
+   Response: Neural networks are a type of machine learning algorithm that can be used to solve complex problems by mimicking the functioning of biological nervous systems. They consist of an input layer, hidden layers, and an output layer, each with their own set of neurons that interact with each other through connections called weights or synapses. 
+
+At the input layer, the network receives data from outside the system, such as images, text, or sensor readings. The data is typically preprocessed using techniques like normalization, scaling, and feature extraction before being passed through the hidden layers. 
+
+The hidden layers contain many neurons connected together in a chain-like structure. Each neuron has its own weight matrix, which determines how strongly it influences the next neuron's output. The final output (or "classification" or "prediction") of the neural network is determined based on the summed outputs of all the neurons
+
+ AFTER TRAINING (DPO-Aligned TinyLlama):
+   Reward Score: +0.1224
+   Response: Neural networks are a type of artificial intelligence (AI) algorithm that simulates the way human brains learn and remember things. They consist of several layers, each with its own set of neurons (specialized processing units), connected by connections called synapses. 
+
+Here's how it works:
+
+1. Input: The network receives an input signal (e.g., a picture or audio file) from a data source.
+2. Preprocessing: The input is preprocessed to remove any unnecessary noise and convert it into a format compatible with the network's architecture. This can involve scaling, normalization, or other transformations.
+3. Feeding in Data: The preprocessed input goes through a "feedforward" process where the first layer of neurons processes the inputs, then feeds them on to the second layer. 
+4. Learning Process: As more data is added, the network will gradually improve its ability to recognize
+
+ WINNER: Fine-tuned model (Delta = +0.0296, ~+31.9%)
+==============================================================================
+
+vvv Demo 3/5 vvv
+==============================================================================
+ PROMPT: How do I stay motivated while studying?
+==============================================================================
+
+ BEFORE TRAINING (Base TinyLlama):
+   Reward Score: +0.1398
+   Response: Staying motivated while studying can be challenging, but there are several strategies that can help you stay focused and on track:
+
+1. Create a routine: Establish a regular study schedule and stick to it. This will help you avoid distractions and ensure consistent attention on your studies.
+
+2. Set achievable goals: Break down larger tasks into smaller ones and set specific, measurable goals for yourself. This helps you focus on the task at hand and maintain momentum towards achieving your goal.
+
+3. Avoid distracting activities: Try not to spend too much time on non-study related activities such as watching TV or scrolling through social media. Keep these activities to a minimum to improve concentration.
+
+4. Find a study buddy: Partner up with someone who is also studying or has similar interests. Having someone to share ideas and discuss progress can boost productivity and motivation.
+
+5. Take breaks:
+
+ AFTER TRAINING (DPO-Aligned TinyLlama):
+   Reward Score: +0.1089
+   Response: Studying can be a challenging task, especially if you are new to it or have been put on hold due to other commitments. However, with the right mindset and some helpful tips, you can stay motivated throughout your studies. 
+
+1. Set realistic goals: Start by setting achievable goals for yourself. This will help keep things in perspective and make progress feel more attainable. 
+
+2. Break down larger tasks into smaller ones: If you think about too much at once, you may become overwhelmed. Breaking down tasks into smaller, manageable steps can help you stay focused and motivated. 
+
+3. Find a study buddy: Partner up with someone else who is also studying. Having accountability partners can help you stay on track and avoid procrastination. 
+
+4. Use positive self-talk: Instead of saying "I won't be able to finish this" use
+
+  Base model scored higher this turn (Delta = -0.0308)
+    Note: due to sampling, individual prompts may favor either model;
+    the AVERAGE over many prompts is what shows DPO's effect.
+==============================================================================
+
+vvv Demo 4/5 vvv
+==============================================================================
+ PROMPT: I'm feeling anxious about an upcoming exam. Any advice?
+==============================================================================
+
+ BEFORE TRAINING (Base TinyLlama):
+   Reward Score: +0.0561
+   Response: As a trained assistant, I can provide some helpful tips and suggestions to help you feel more confident and relaxed when approaching the upcoming exam:
+
+1. Plan ahead: Take some time to research the content covered in the exam and familiarize yourself with the format. This will give you a better understanding of what is expected and help you prepare accordingly.
+
+2. Practice: Practicing your knowledge and skills on practice problems and scenarios can help you build confidence beforehand. You may also find online study tools or interactive quizzes that simulate the actual exam environment.
+
+3. Stay focused: Focus on the task at hand and don't get distracted by irrelevant thoughts. Keep your mind clear and focused on the task at hand.
+
+4. Get enough sleep: Getting enough sleep allows your brain to process information and remember important concepts better. Make sure to get 7-8 hours of sleep each night.
+
+5. Eat well
+
+ AFTER TRAINING (DPO-Aligned TinyLlama):
+   Reward Score: +0.0313
+   Response: Sorry to hear you're feeling anxious about the upcoming exam, but I'm here to help. 
+
+Here are some tips that may help:
+
+1. Reframe your thoughts: Instead of thinking "I have to fail this exam" or "This will be a disaster," try to focus on how you can learn from it and improve for future exams.
+2. Practice and prepare: Take advantage of practice tests and study materials to prepare for the real exam. Don't worry about being perfect; just aim for accuracy.
+3. Focus on the task at hand: The exam is not about memorizing information; it's about understanding what was given in class. Focus on applying what you know to the problem at hand.
+4. Seek support: Talk to friends, family, or teachers who know you well about their experiences with similar situations. You could also consider seeking guidance or help from a tutor or
+
+  Base model scored higher this turn (Delta = -0.0247)
+    Note: due to sampling, individual prompts may favor either model;
+    the AVERAGE over many prompts is what shows DPO's effect.
+==============================================================================
+
+vvv Demo 5/5 vvv
+==============================================================================
+ PROMPT: What's a healthy way to handle disagreements with friends?
+==============================================================================
+
+ BEFORE TRAINING (Base TinyLlama):
+   Reward Score: +0.0536
+   Response: There is no one-size-fits-all solution for handling disagreements with friends. Here are some suggestions that may help:
+1. Listen actively and try to understand the other person's perspective: Try to listen attentively and show genuine interest in what they have to say. This can help you understand their point of view better. 2. Avoid attacking or criticizing each other: Instead, focus on finding common ground. Discuss solutions or compromises rather than pointing out flaws. 3. Be willing to take responsibility: If there was an issue that needs addressing, acknowledge your role and ask for forgiveness if necessary. Take ownership of your mistake and work towards resolving it together. 4. Use positive language: Choose words that encourage mutual understanding and respect. Avoid using negative language that exacerbates tensions. 5. Practice active listening: Show appreciation by staying present
+
+ AFTER TRAINING (DPO-Aligned TinyLlama):
+   Reward Score: +0.0677
+   Response: Sure, handling disagreements with friends is not always easy but there are some healthy ways to approach the situation: 
+
+1. Listen actively: When you have an argument with your friend, listen carefully to their side of the story and try to understand where they are coming from. 
+
+2. Be open to new perspectives: Sometimes when two people have different opinions on a topic, it means that they are bringing different experiences or points of view to the discussion. Try to be open to hearing what they have to say even if you don't agree with it all. 
+
+3. Find common ground: You may find that there are certain aspects of the disagreement that you both agree on, such as how important certain issues are to you or how much you value having similar values in your friendship. 
+
+4. Take responsibility for your own part in the conflict: It's human nature to blame others for problems,
+
+ WINNER: Fine-tuned model (Delta = +0.0141, ~+26.3%)
+==============================================================================
