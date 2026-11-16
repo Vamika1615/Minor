@@ -1,33 +1,33 @@
 \chapter{Results and Discussion}
 \label{ch:results}
 
-This chapter gives our results. Sections~\ref{sec:setup}--\ref{sec:qual} contain the \textbf{measured results} of the two Kaggle runs, copied directly from the outputs of the notebooks we submit: configuration~A (\texttt{mini-6\_working}) and configuration~B (\texttt{mini-7-fixed}). Section~\ref{sec:local} adds the results of the smaller \emph{local} run made with the packaged system on a laptop. Section~\ref{sec:reported} then shows, separately, the \textbf{numbers given in our earlier IEEE-style paper draft}. Those numbers are higher than anything our code produced and we could not reproduce them, so every table and figure taken from the draft carries the label ``Reported in paper draft'' and the mark~\reportedtag. Section~\ref{sec:discussion} discusses all of these results together.
+Our results are presented in this chapter. Sections~\ref{sec:setup}--\ref{sec:qual} contain the \textbf{measured results} of the two Kaggle runs, copied from the output of the notebooks we submit: configuration~A (\texttt{mini-6\_working}) and configuration~B (\texttt{mini-7-fixed}). Section~\ref{sec:local} adds the results of a smaller \emph{local} run performed with the packaged system on a laptop. Section~\ref{sec:reported} then presents, separately, the \textbf{numbers given in our earlier IEEE-style paper draft}. Our code could not get close to those numbers and they were not reproduced, so every table and figure taken from the draft carries the label ``Reported in paper draft'' and the mark~\reportedtag. Section~\ref{sec:discussion} discusses all of these results together.
 
 \section{Experimental Setup}
 \label{sec:setup}
 
 \subsection{Configurations}
-We ran the whole pipeline twice on Kaggle's two T4 GPUs. Both runs use the code of Chapter~\ref{ch:impl}; they differ only in the data mix and the settings (Tables~\ref{tab:rm-hparams} and~\ref{tab:dpo-hparams}):
+We ran the entire pipeline twice using Kaggle's two T4 GPUs. Both runs use the code of Chapter~\ref{ch:impl}; they differ only in the data mix and the settings listed in Tables~\ref{tab:rm-hparams} and~\ref{tab:dpo-hparams}:
 \begin{itemize}
-  \item \textbf{Configuration A (balanced):} 2,000 pairs from each source. Reward model with LoRA rank 32, two epochs, learning rate $2\times10^{-5}$. DPO on 1,500 pairs with rank-16 LoRA on the attention layers only, learning rate $5\times10^{-5}$, $\beta$=0.1, two epochs.
-  \item \textbf{Configuration B (more HH-RLHF):} 6,000 HH-RLHF and 2,000 LMSYS pairs. Reward model with LoRA rank 64, three epochs, learning rate $1\times10^{-5}$. DPO on 3,000 pairs (two HH-RLHF for every LMSYS pair) with rank-32 LoRA on attention and feed-forward layers, learning rate $1\times10^{-5}$, $\beta$=0.15, keeping the checkpoint with the best validation loss.
+  \item \textbf{Configuration A (balanced):} 2,000 pairs from each source. Reward model with LoRA rank 32, two epochs and learning rate $2\times10^{-5}$. DPO on 1,500 pairs, applying rank-16 LoRA to the attention layers only, with learning rate $5\times10^{-5}$, $\beta$=0.1 and two epochs.
+  \item \textbf{Configuration B (more HH-RLHF):} 6,000 HH-RLHF and 2,000 LMSYS pairs. Reward model with LoRA rank 64, three epochs and learning rate $1\times10^{-5}$. DPO with rank-32 LoRA on 3,000 pairs (two HH-RLHF pairs for each LMSYS pair) on the attention and feed-forward layers, with learning rate $1\times10^{-5}$ and $\beta$=0.15, keeping the checkpoint with the lowest validation loss.
 \end{itemize}
 
 \subsection{Evaluation protocol}
 \begin{enumerate}
-  \item \textbf{RM evaluation:} pairwise accuracy and mean reward gap on the full held-out test split (250 pairs in A, 500 in B), overall and per source.
+  \item \textbf{RM evaluation:} the full held-out test split (250 pairs in A, 500 in B) is scored by the reward model, and pairwise accuracy and mean reward gap are calculated overall and per source.
   \item \textbf{Demo reel:} five fixed prompts (two factual, one study-skills, two socio-emotional), one sample per model, scored by the RM.
   \item \textbf{Held-out evaluation:} 25 HH-RLHF and 25 LMSYS prompts sampled from the test split with seed 42; one sample per model per prompt; win rate and mean $\Delta$ overall and per source.
   \item \textbf{Interactive session (config.\ A):} seven prompts typed live during a demonstration.
 \end{enumerate}
 
 \subsection{Statistical resolution}
-Our test sets are small, so it helps to know how much a percentage can move by chance alone. For $n$ yes/no outcomes near 50\%, a 95\% interval is roughly $\pm1.96\sqrt{0.25/n}$. That is about $\pm$13.9 points for 50 prompts and $\pm$19.6 points for 25. A difference in win rate smaller than this should not be read as a real effect. For the reward-model test sets the margins are about $\pm$6.1 points ($n$=250), $\pm$4.3 ($n$=500), $\pm$5.0 ($n$=375) and $\pm$8.6 ($n$=125).
+Our test sets are small, so it is helpful to know how much a percentage can move by chance alone. For $n$ yes/no outcomes near 50\%, a 95\% interval is approximately $\pm1.96\sqrt{0.25/n}$. That is about $\pm$13.9 points for 50 prompts and $\pm$19.6 points for 25. A difference in win rate smaller than this should not be read as a real effect. For the reward-model test sets the margins are about $\pm$6.1 points ($n$=250), $\pm$4.3 ($n$=500), $\pm$5.0 ($n$=375) and $\pm$8.6 ($n$=125).
 
 \section{Dataset Analysis}
 \label{sec:res-data}
 
-Figures~\ref{fig:m6-dataset} and~\ref{fig:m7-dataset} describe the training data of the two configurations. Prompt lengths look similar for both sources, but LMSYS chosen answers are clearly longer than HH-RLHF ones, and their long tail is cut at 1,500 characters. Because the two sources differ this much in length, a reward model that learned ``longer is better'' from LMSYS might carry that rule over to HH-RLHF. Checking each source separately is how we would notice.
+The training data of the two configurations are described by Figures~\ref{fig:m6-dataset} and~\ref{fig:m7-dataset}. Prompt lengths of the two sources look about the same, but LMSYS chosen answers are clearly longer than HH-RLHF ones, and their long tail is cropped at 1,500 characters. Because the two sources differ this much in length, a reward model that learned ``longer is better'' from LMSYS might carry that rule over to HH-RLHF. We would only notice this by checking each source on its own.
 
 \begin{figure}[H]
 \centering
@@ -47,7 +47,7 @@ Figures~\ref{fig:m6-dataset} and~\ref{fig:m7-dataset} describe the training data
 \label{sec:res-rm}
 
 \subsection{Training dynamics}
-Figures~\ref{fig:m6-rmloss} and~\ref{fig:m7-rmloss} plot the reward model's training and validation loss. Both start at $\log 2\approx0.693$, which is what a model that cannot tell the two answers apart scores. In configuration A the validation loss reaches about 0.667 after roughly 210 steps (two epochs with 32 pairs per step). Configuration B, with twice the data and three epochs, reaches about 0.653 after roughly 650 steps, but stops improving after step 400 while the training loss keeps jumping up and down. Neither curve diverges. The improvement is small, though: a loss of 0.653 means the model gives the correct answer an average probability of only about $e^{-0.653}\approx0.52$. It is right more often than wrong, but not by much.
+Figures~\ref{fig:m6-rmloss} and~\ref{fig:m7-rmloss} show the reward model's training and validation loss. Both start at $\log 2\approx0.693$, the score of a model that cannot distinguish between the two answers. In configuration A the validation loss falls to approximately 0.667 after about 210 steps (two epochs with 32 pairs per step). In configuration B, with twice the data and three epochs, it reaches 0.653 after about 650 steps, but stops improving after step 400 while the training loss keeps hopping up and down. Neither curve diverges. The improvement is not large, however: a loss of 0.653 means the model gives the correct answer an average probability of only about $e^{-0.653}\approx0.52$. It is right more often than it is wrong, but not by much.
 
 \begin{figure}[H]
 \centering
@@ -88,14 +88,14 @@ Table~\ref{tab:rm-results} gives the per-source test results of both configurati
 \end{tabular}
 \end{table}
 
-\paragraph{Better than guessing.} Both reward models beat the 50\% baseline by more than the margin of error; the 95\% intervals are about [53\%, 65\%] for A and [55\%, 64\%] for B. In every subset the average score of chosen answers is above that of rejected answers, which is the pass condition we set in the notebook.
+\paragraph{Better than guessing.} Both reward models beat the 50\% baseline by more than the margin of error; the 95\% intervals are about [53\%, 65\%] for A and [55\%, 64\%] for B. For all subsets the average score of the chosen answers is higher than that of the rejected answers, which is the pass condition we set in the notebook.
 
-\paragraph{Balance between sources.} In configuration A the reward model gets \emph{exactly} the same accuracy on both sources, 74 correct out of 125 each. In configuration B the gap is 6.9 points (57.9\% against 64.8\%). Both are inside our 10-point limit, so neither model has locked onto one source. The direction of B's gap surprised us: B saw three times more HH-RLHF pairs than LMSYS pairs, yet it does better on LMSYS. Our explanation is that an LMSYS pair often compares answers from two quite different chatbots, which is easier to judge, whereas the two answers in an HH-RLHF pair come from very similar Anthropic models and are often nearly the same.
+\paragraph{Balance between sources.} In configuration A the reward model is \emph{exactly} as accurate on both sources, with 74 of 125 pairs correct on each. In configuration B the gap is 6.9 points (57.9\% against 64.8\%). Both are within our 10-point limit, so neither model has locked onto one source. The direction of B's gap surprised us: B saw three times more HH-RLHF pairs than LMSYS pairs, yet it performs better on LMSYS. Our explanation is that an LMSYS pair is likely to compare the answers of two very different chatbots, which is easier to judge, whereas the two answers in an HH-RLHF pair come from very similar Anthropic models and are often nearly identical.
 
-\paragraph{More data did not help much.} Going from A to B, with three times the HH-RLHF data and one more epoch, made the model more confident (average gap 0.069 to 0.118) but hardly more accurate (59.2\% to 59.6\%). At this scale, a 184M-parameter encoder on a few thousand noisy pairs seems limited by its size and by the label noise rather than by the amount of data.
+\paragraph{More data did not help much.} Going from A to B, with three times the HH-RLHF data and one more epoch, the model became more confident (average gap 0.069 to 0.118) but hardly more accurate (59.2\% to 59.6\%). At this scale, a 184M-parameter encoder trained on a few thousand noisy pairs seems to be limited by its size and by the label noise rather than by the amount of data.
 
 \subsection{Score distributions}
-Figures~\ref{fig:m6-rmdist} and~\ref{fig:m7-rmdist} show how the scores and the per-pair gaps are spread. The chosen and rejected histograms overlap a lot, and the gap histograms sit only slightly to the right of zero, which fits a weak but real signal. In configuration A a large group of LMSYS scores bunches up near the top of the range (about $+0.1$), as if the classifier output saturates for some inputs.
+Figures~\ref{fig:m6-rmdist} and~\ref{fig:m7-rmdist} show how the scores and the per-pair gaps are spread. The chosen and rejected histograms overlap a great deal, and the gap histograms sit only slightly to the right of zero, which indicates a weak but real signal. In configuration A a large group of LMSYS scores clusters near the top of the range (around $+0.1$), as if the classifier output saturates for some inputs.
 
 \begin{figure}[H]
 \centering
@@ -130,7 +130,7 @@ Figures~\ref{fig:m6-dpocurves} and~\ref{fig:m7-dpocurves} show the DPO training 
 \label{fig:m7-dpocurves}
 \end{figure}
 
-In configuration A the loss drops from 0.69 to about 0.54 in roughly 190 steps. The implicit reward of chosen answers climbs to about $+0.13$ and that of rejected answers falls to about $-0.24$, so the two move apart as intended, and the share of pairs ranked correctly rises from chance to about 80\%. Configuration B trains for about 560 steps and goes much further: the loss falls to about 0.2 and accuracy reaches about 95\% (Table~\ref{tab:dpo-log}). In B, however, \emph{both} implicit rewards turn negative, the chosen one to about $-0.9$ and the rejected one to about $-2.9$. The model is making both answers less likely, the rejected one much more so. This pattern is known from the DPO literature~\cite{azar2024ipo}. It suggests the model is memorising the particular training pairs rather than becoming more likely to write answers like the chosen ones.
+In configuration A the loss goes from 0.69 down to about 0.54 after approximately 190 steps. The implicit reward of chosen answers climbs to about $+0.13$ and that of rejected answers falls to about $-0.24$, so the two move apart as desired, and the share of pairs ranked correctly rises from chance to about 80\%. Configuration B trains for about 560 steps and goes much further: the loss falls to about 0.2 and accuracy reaches about 95\% (Table~\ref{tab:dpo-log}). In B, however, \emph{both} implicit rewards turn negative: the chosen one falls to about $-0.9$ and the rejected one to about $-2.9$. The model is making both answers less likely, the rejected one much more so. This pattern has been documented in the DPO literature~\cite{azar2024ipo}. It suggests that the model is memorising the particular training pairs rather than becoming more likely to write answers like the chosen ones.
 
 \begin{table}[!htbp]
 \centering
@@ -150,7 +150,7 @@ In configuration A the loss drops from 0.69 to about 0.54 in roughly 190 steps. 
 \end{tabular}
 \end{table}
 
-Measured by its own training objective, then, DPO worked in both runs. What matters more is whether the aligned model's answers are actually preferred, first by the reward model and ideally by people. That is the subject of the next sections.
+If success is measured by the training objective alone, DPO worked in both runs. What matters more is whether the aligned model's answers are actually preferred, first by the reward model and preferably by people. This is the subject of the next sections.
 
 \section{Base vs.\ DPO Comparison}
 \label{sec:res-compare}
@@ -194,10 +194,10 @@ Healthy way to handle disagreements with friends? & $-0.106$ & $-0.155$ & $-0.04
 \label{fig:demo}
 \end{figure}
 
-In configuration A the DPO model wins three of the five prompts and improves the average score by $+0.124$, mostly because of one large gain on the first factual question. The base model wins the two prompts about emotions by small margins. In configuration B the differences are about ten times smaller ($|\Delta|\le0.031$) and the average change is close to zero. One sample each on five prompts cannot support any conclusion; we include the demo set to illustrate the outputs, not to measure them.
+In configuration A the DPO model wins 3 of the 5 prompts and the mean score increases by $+0.124$, mainly because of one large increase on the first factual question. The base model beats DPO on the two emotion prompts, by small margins. In configuration B the differences are about ten times smaller ($|\Delta|\le0.031$) and the average change is close to zero. One sample on each of five prompts cannot support any conclusion; we include the demo set to show the outputs, not to measure them.
 
 \subsection{Held-out evaluation on 50 prompts}
-Table~\ref{tab:heldout} gives the main quantitative result for the aligned policy, and Figures~\ref{fig:m6-headline} and~\ref{fig:m7-headline} visualise it.
+Table~\ref{tab:heldout} gives the key quantitative outcome for the aligned policy, and Figures~\ref{fig:m6-headline} and~\ref{fig:m7-headline} show it visually.
 
 \begin{table}[!htbp]
 \centering
@@ -235,12 +235,12 @@ Table~\ref{tab:heldout} gives the main quantitative result for the aligned polic
 \label{fig:m7-headline}
 \end{figure}
 
-\paragraph{Configuration A.} DPO wins exactly half of the 50 prompts, and the average score rises by only $+0.027$. The per-source figures, 56\% and 44\%, are well within the $\pm$19.6-point margin for 25 prompts, so they are not different from chance. In the sorted chart the biggest gains are on HH-RLHF prompts, but there are about as many losses.
+\paragraph{Configuration A.} DPO wins exactly half of the 50 prompts, and the average score rises by only $+0.027$. The per-source figures of 56\% and 44\% are well within the $\pm$19.6-point margin for 25 prompts, so they are not different from chance. In the sorted chart the biggest gains are on HH-RLHF prompts, but there are about as many losses.
 
-\paragraph{Configuration B.} Again DPO wins exactly half overall, but this time the two sources go in opposite directions, and strongly: 76\% wins on LMSYS prompts (19 of 25) and only 24\% on HH-RLHF prompts (6 of 25). A two-sided binomial test against 50\% gives $p\approx0.015$ for each source. The average score rises by $+0.115$ on LMSYS and falls by $0.161$ on HH-RLHF. Looking only at the overall figure, we would have concluded that DPO did nothing. Split by source, it is clear that the more heavily trained model has changed in a way the reward model likes for open Arena-style questions and dislikes for HH-style dialogue replies.
+\paragraph{Configuration B.} Here too DPO wins 50\% of the time overall, but the two sources go in opposite directions, and strongly: 76\% wins on LMSYS prompts (19 of 25) and only 24\% on HH-RLHF prompts (6 of 25). A two-sided binomial test against 50\% gives $p\approx0.015$ for each source. The average score increases by $+0.115$ on LMSYS and drops by $0.161$ on HH-RLHF. Had we looked only at the overall number, we would have concluded that DPO did nothing. Split by source, it is obvious that the more heavily trained model has changed in a way the reward model likes for Arena-style questions and dislikes for HH-style dialogue replies.
 
 \subsection{Interactive session (configuration A)}
-Table~\ref{tab:interactive} lists the seven prompts typed during a live demonstration of configuration A. DPO won four of them, with an average change of $+0.172$, but its biggest win turns out to be a problem, as Section~\ref{sec:hacking} shows.
+Table~\ref{tab:interactive} lists the seven prompts entered during a live demonstration of configuration A. DPO won 4 of them with an average gain of $+0.172$, but its largest win, a change of $+0.687$, turns out to be a problem, as Section~\ref{sec:hacking} shows.
 
 \begin{table}[!htbp]
 \centering
@@ -268,21 +268,21 @@ What's a healthy way to handle disagreements with friends? & $-0.1656$ & $-0.121
 \label{sec:qual}
 
 \subsection{A genuine improvement}
-Take the prompt \emph{``How do I stay motivated while studying?''} (configuration A, $\Delta=+0.173$). Both models answer with a numbered list. The base model's third tip says that if studying feels boring you should ``try finding something else that you enjoy doing'', such as watching TV, which defeats the purpose. The DPO answer is more practical: it turns a vague aim into a daily commitment (``I will work on my essays and assignments for 2 hours per day''), suggests finding people who can support you, and recommends tracking progress in a planner. Here we agree with the reward model that the DPO answer is more useful.
+Consider the prompt \emph{``How do I stay motivated while studying?''} (configuration A, $\Delta=+0.173$). Both models answer with a numbered list. The base model's third tip says that if studying feels boring you should ``try finding something else that you enjoy doing'', such as watching TV, which defeats the purpose of studying. The DPO answer is more practical: it turns a general goal into a daily practice (``I will work on my essays and assignments for 2 hours per day''), recommends seeking help and support from others, and suggests using a planner to monitor progress. Here we agree with the reward model that the DPO answer is more useful.
 
 \subsection{A case of reward hacking}
 \label{sec:hacking}
-Now take \emph{``what is 2 + 3 ?''} (Table~\ref{tab:interactive}). The base model gets it right in an odd way, by writing a short Java program that prints 5. The DPO model starts well (``the sum of 2 and 3 will be 5'') but then wanders into rewording unrelated everyday sentences and claims that ``\texttt{2+3} is the same as \texttt{3 + 6}'', which is wrong. The reward model still rates the DPO answer $0.69$ higher, the largest gain in any of our evaluations.
+Now take \emph{``what is 2 + 3 ?''} (Table~\ref{tab:interactive}). In a strange way, the base model is on the money: it writes a short Java program that prints 5. The DPO model begins well (``the sum of 2 and 3 will be 5'') but then drifts into rewording unrelated sentences and says that ``\texttt{2+3} is the same as \texttt{3 + 6}'', which is incorrect. The reward model still rates the DPO answer $0.69$ higher, the largest gain in any of our evaluations.
 
-This is reward hacking of exactly the kind described by Gao \emph{et al.}~\cite{gao2023overoptimization} and Casper \emph{et al.}~\cite{casper2023open}. Our small reward model has picked up surface signs of answers people liked, such as a friendly explaining tone, list-like structure and mathematical words, but it never checks whether an answer is correct. A model trained towards its preferences inherits those blind spots, and the same model used as a judge cannot catch them. For this reason we treat every win rate in this chapter as a rough indication, not as proof.
+This is what Gao \emph{et al.}~\cite{gao2023overoptimization} and Casper \emph{et al.}~\cite{casper2023open} call reward hacking. Our small reward model has picked up surface features of the answers people preferred, such as a friendly explaining tone, list-like structure and mathematical words, but it does not verify whether an answer is correct. A model trained towards its preferences inherits these blind spots, and the same model serving as the judge cannot identify them. For this reason we treat every win rate in this chapter as a rough indication, not as proof.
 
 \section{Results of the Local System Run}
 \label{sec:local}
 
-After packaging the code (Section~\ref{sec:system}) we trained the \emph{local} configuration from scratch on an Apple M1 laptop with 8\,GB of memory, to check that the whole system works outside Kaggle. All numbers in this section come from that run's log files and its \texttt{metrics.json}.
+Once the code was packaged (Section~\ref{sec:system}), we trained the \emph{local} configuration from nothing on an 8\,GB Apple M1 laptop, mainly to prove that the system runs away from Kaggle. Every number in this section is taken from that run's log files and its \texttt{metrics.json}.
 
 \subsection{Training}
-The reward model trained for 94 steps in 58 minutes. On the 124 validation pairs its loss fell from $0.693$ to $0.679$ and it ranked 65.2\% of pairs correctly. The first DPO attempt stopped at step 3 because the GPU ran out of memory. After we reduced DPO to one pair per step with 256-token inputs (Section~\ref{sec:impl-fixes}, fix 16), it completed 43 steps in 22 minutes. Its validation loss moved only from $0.693$ to $0.684$, and its implicit-reward accuracy on validation pairs was 56.4\%. This is a much weaker update than configuration A, which is expected from one epoch on 400 pairs.
+Reward-model training took 94 steps and 58 minutes. Its loss on the 124 validation pairs went from $0.693$ to $0.679$, and it ordered 65.2\% of them correctly. Our first DPO attempt crashed at step 3 when the laptop's GPU memory ran out. Once DPO was cut down to one pair per step and 256-token inputs (Section~\ref{sec:impl-fixes}, fix 16), it finished 43 steps in 22 minutes. Validation loss only dropped from $0.693$ to $0.684$, and implicit-reward accuracy on the validation pairs was 56.4\%. With a single epoch over 400 pairs, an update this much weaker than configuration A's is what we expected.
 
 \subsection{Evaluation}
 \begin{table}[!htbp]
@@ -317,15 +317,15 @@ LMSYS & 15 & $-0.283$ & $-0.249$ & $+0.033$ & 53.3\% (8/15)\\
 \end{tabular}
 \end{table}
 
-On the five demo prompts the DPO model won two (``Explain neural networks simply'', $\Delta=+0.198$, and the exam-anxiety prompt, $\Delta=+0.009$) and lost three by small margins, with a mean change of $+0.029$.
+Of the five demo prompts, DPO won two (``Explain neural networks simply'', $\Delta=+0.198$, and the exam-anxiety prompt, $\Delta=+0.009$) and narrowly lost the other three, for a mean change of $+0.029$.
 
 \subsection{What the local run shows}
-With half the data and one epoch, the local reward model is slightly weaker than the Kaggle ones (57.1\% against about 59\%). It is again better on LMSYS than on HH-RLHF, the same direction as configuration B, and the 9.5-point gap is just inside our 10-point limit. The DPO model wins 17 of 30 prompts. With only 15 prompts per source the margin of error is about $\pm$25 points, so none of these win rates differs from chance. The value of this run is not its scores. It shows that the complete system, from raw data to a trained reward model, a trained policy, a per-source evaluation and a working web application, can be reproduced on a student laptop in about one and a half hours. Figure~\ref{fig:ui-results} shows these results as they appear in the application.
+Trained on half the data for one epoch, the local reward model comes out a little weaker than the Kaggle ones (57.1\% versus roughly 59\%). Like configuration B, it does better on LMSYS than on HH-RLHF, and its 9.5-point gap only just meets our 10-point rule. DPO wins 17 of the 30 prompts, but with 15 prompts per source the error margin is around $\pm$25 points, so no win rate here is distinguishable from chance. The scores are not the point of this run. What it shows is that the whole system, from raw data through a trained reward model and policy to a per-source evaluation and a working web app, can be rebuilt on a student's laptop in roughly an hour and a half. Figure~\ref{fig:ui-results} shows the same results inside the application.
 
 \section{Results Reported in the Earlier Paper Draft}
 \label{sec:reported}
 
-Earlier in the project we wrote an IEEE-format paper draft with the same title as this report. It gave much higher numbers than the ones measured above. We include them here so that the record is complete, but \textbf{kept apart from the measured results}. Neither of the submitted notebooks produced these numbers or figures, and we could not reproduce them, so they should be treated as unverified.
+Partway through the project we wrote an IEEE-style paper draft under the same title as this report, and it quoted far higher numbers than those measured above. For completeness we reproduce them here, \textbf{separated from the measured results}. They did not come from either submitted notebook, our code could not reproduce them, and they should be read as unverified.
 
 \begin{table}[!htbp]
 \centering
@@ -417,7 +417,7 @@ Cached runs & -- & -- & $<$30 s\\
 \end{tabular}
 \end{table}
 
-The draft's figures follow (Figures~\ref{fig:rep-dataset}--\ref{fig:rep-dpoeval}). Two details stand out. Its reward-model accuracy curve (Figure~\ref{fig:rep-rmtrain}b) climbs to about 72\%, and its loss curve starts above 1.0. A Bradley--Terry loss on balanced pairs has to start at $\log 2\approx0.69$, as our measured curves in Figures~\ref{fig:m6-rmloss} and~\ref{fig:m7-rmloss} do.
+The draft's figures are shown next (Figures~\ref{fig:rep-dataset}--\ref{fig:rep-dpoeval}). Two things in them are suspicious. The reward-model accuracy curve (Figure~\ref{fig:rep-rmtrain}b) rises to about 72\%, and the loss curve begins above 1.0. On balanced pairs a Bradley--Terry loss must begin at $\log 2\approx0.69$, which is exactly where our measured curves in Figures~\ref{fig:m6-rmloss} and~\ref{fig:m7-rmloss} begin.
 
 \begin{figure}[H]
 \centering
@@ -478,7 +478,7 @@ Demo-reel mean $\Delta$ & $+0.40$ & $+0.124$ & $-0.003$\\
 \end{tabular}
 \end{table}
 
-The draft's general claims hold up in the measured data: the reward model beats chance and is balanced across sources under the 10-point rule, and DPO trains stably while updating few parameters. Its numbers do not hold up. Measured reward-model accuracy is about 13 points lower, and the measured win rate shows no overall gain over the base model. The draft's ablation table (Table~\ref{tab:rep-ablation}) was never re-run, so its single-source rows have nothing measured to compare with.
+The draft's broad statements survive the check: the reward model is better than chance and balanced across sources by the 10-point rule, and DPO trains stably while touching few parameters. Its specific numbers do not survive. Measured reward-model accuracy is roughly 13 points lower, and the measured win rate shows no overall improvement over the base model. The draft's ablation table (Table~\ref{tab:rep-ablation}) was never re-run, so there are no measured single-source results to set against it.
 
 \section{Discussion}
 \label{sec:discussion}
@@ -486,8 +486,8 @@ The draft's general claims hold up in the measured data: the reward model beats 
 \subsection{Why is reward-model accuracy around 59\%?}
 Several factors limit the reward model:
 \begin{itemize}
-  \item \textbf{Noisy labels.} Many HH-RLHF pairs are almost identical, and the Llama~2 authors found their reward models were close to guessing on pairs that annotators had marked as only slightly different~\cite{touvron2023llama2}. LMSYS votes come from anonymous visitors with no guidelines. On such data even a perfect model could not reach anywhere near 100\%.
-  \item \textbf{Small model, little data.} Reward-model accuracy improves with model size and with data~\cite{bai2022hh,gao2023overoptimization}. Ours has 184M parameters, LoRA trains only 1--2\% of them, and it sees between 3,500 and 7,000 pairs.
+  \item \textbf{Noisy labels.} A lot of HH-RLHF pairs are close to identical, and the Llama~2 team saw their own reward models do little better than guessing on pairs that annotators had rated as only slightly different~\cite{touvron2023llama2}. LMSYS votes are cast by anonymous visitors with no guidelines at all. No model, however good, could get close to 100\% on data like this.
+  \item \textbf{Small model, little data.} Reward models get more accurate as the model and the dataset grow~\cite{bai2022hh,gao2023overoptimization}. Ours has 184M parameters, of which LoRA trains only 1--2\%, and it is trained on 3,500 to 7,000 pairs.
   \item \textbf{Truncation.} Inputs are cut to 512 tokens, so for long multi-turn prompts the decisive part of a response may be truncated away.
 \end{itemize}
 The near-identical accuracy of A and B suggests that, of these, data quantity is not the binding constraint at this scale.
@@ -495,18 +495,18 @@ The near-identical accuracy of A and B suggests that, of these, data quantity is
 \subsection{Why does successful DPO training not yield a higher win rate?}
 DPO reached 80--95\% implicit-reward accuracy, yet the policy is not preferred by the reward model overall. Three mechanisms explain this.
 
-\paragraph{1. The training answers were written by other models.} Every chosen and rejected answer in both datasets came from some \emph{other} model: Anthropic's models for HH-RLHF, and dozens of public chatbots, many far bigger than TinyLlama, for LMSYS. DPO can make such answers \emph{relatively} more or less likely, but it cannot make a 1.1B model write like GPT-4. Configuration B shows the usual sign of this: the probability of both the chosen and the rejected answer goes down (Table~\ref{tab:dpo-log}). The model mostly learns what \emph{not} to say on those specific pairs, which carries over only partly to the answers it writes itself.
+\paragraph{1. The training answers were written by other models.} None of the chosen or rejected answers in either dataset came from TinyLlama. HH-RLHF answers were written by Anthropic's models and LMSYS answers by dozens of public chatbots, many of them much larger. DPO can shift the \emph{relative} probability of such answers, but it cannot turn a 1.1B model into GPT-4. Configuration B shows the typical symptom: the probability of the chosen and the rejected answer both fall (Table~\ref{tab:dpo-log}). What the model mostly learns is what \emph{not} to say on those particular pairs, and that only partly transfers to the answers it generates.
 
-\paragraph{2. A weak judge hides real effects.} Suppose the aligned model really is better on a share $p$ of prompts, and the judge agrees with the true preference with probability $a$. The win rate we \emph{observe} is then
+\paragraph{2. A weak judge hides real effects.} Say the aligned model truly is better on a fraction $p$ of prompts, and the judge sides with the true preference with probability $a$. Then the win rate we actually \emph{see} is
 \begin{equation}
   \mathrm{WR}_{\text{obs}} = a\,p + (1-a)(1-p).
 \end{equation}
-Our judge's measured accuracy is about $a\approx0.59$. Even if the draft's figure of $p=0.66$ were the true win rate, we would observe only about $0.59\times0.66 + 0.41\times0.34\approx0.53$, which 50 prompts cannot tell apart from 50\%. So our measured 50\% fits a small real improvement just as well as no improvement. Only a stronger, independent judge can settle it.
+For our judge $a\approx0.59$. So even if the draft's $p=0.66$ were correct, we would only see about $0.59\times0.66 + 0.41\times0.34\approx0.53$, and 50 prompts cannot separate that from 50\%. Our measured 50\% is therefore just as consistent with a small genuine improvement as with none. A stronger, independent judge is the only way to decide.
 
-\paragraph{3. The judge and the trained model share blind spots.} The reward model that measures the gain has the same weaknesses that preference training can exploit, as the ``2 + 3'' answer showed. Some of the gains it reports may be reward hacking, and some of the losses may be the judge's own noise.
+\paragraph{3. The judge and the trained model share blind spots.} The reward model that scores the improvement has exactly the weak points that preference training can exploit, as the ``2 + 3'' answer made clear. Some of the gains it reports could be reward hacking, and some of the losses could be its own noise.
 
 \subsection{What the per-source breakdown revealed}
-The main point of the project is that looking at each source separately shows things that one overall number hides, and configuration B demonstrates it best. Its overall win rate of 50\% would usually be reported as ``DPO had no effect'', yet split by source the effect is large and goes in opposite directions (24\% against 76\%). We can suggest possible reasons, but these are guesses we have not tested: (i) the HH-heavy DPO data and larger LoRA let the model fit the HH-RLHF training pairs most closely, and the strong downward drift of the implicit rewards points to over-fitting that hurts its answers to similar prompts; (ii) configuration B's reward model is itself more accurate on LMSYS (64.8\%) than on HH-RLHF (57.9\%), so its verdicts on LMSYS prompts deserve more trust; (iii) longer, more structured answers, typical of LMSYS chosen answers, may score well on open Arena questions but badly as replies inside short HH dialogues. Without the per-source split we would have seen none of this.
+The central lesson of the project is that results split by source reveal what a single overall figure conceals, and configuration B is the clearest case. A 50\% overall win rate would normally be written up as ``DPO had no effect'', yet by source the effect is large and points in opposite directions (24\% versus 76\%). We have some untested ideas about why: (i) the HH-heavy DPO data and bigger LoRA let the model fit HH-RLHF training pairs most tightly, and the steep fall in implicit rewards suggests over-fitting that damages its replies to similar prompts; (ii) B's reward model is itself more accurate on LMSYS (64.8\%) than on HH-RLHF (57.9\%), so its LMSYS verdicts are more trustworthy; (iii) the longer, more structured style typical of LMSYS chosen answers may suit open Arena questions but read badly as a turn in a short HH dialogue. Without splitting by source, none of this would have been visible.
 
 \subsection{Comparison of the two configurations}
 \begin{table}[!htbp]
@@ -530,10 +530,10 @@ Interpretation & Mild, balanced, statistically null effect & Strong source-depen
 \end{tabularx}
 \end{table}
 
-Configuration A is the cautious, well-behaved run. Configuration B shows that a stronger DPO update with more trainable parameters can change the model a lot, but in different directions for different kinds of prompt. More aggressive preference training is not automatically better, and the evaluation has to be able to show where the change goes.
+Configuration A is the safe, steady run. Configuration B shows that a heavier DPO update with more trainable parameters can move the model a long way, but in different directions for different kinds of prompt. Pushing preference training harder does not automatically help, and the evaluation must be able to show where the change lands.
 
 \subsection{Validity of the evaluation}
-Three things limit how much these results can tell us. First, each prompt gets one sampled answer per model, so chance plays a large part; several samples per prompt would help. Second, the reward model is a weak stand-in for human judgement and can be gamed. Third, 25 prompts per source can only reveal large effects. None of this makes the measured numbers wrong, but it limits the conclusions we can draw, and it shapes the future work in Chapter~\ref{ch:conclusion}.
+There are three limits on what these results can tell us. Each prompt gets just one sampled answer per model, so luck plays a big role; several samples per prompt would reduce that. The reward model is a weak, gameable substitute for human judgement. And 25 prompts per source can only pick up large effects. None of this makes the measured numbers wrong, but it does bound the conclusions, and it drives the future work listed in Chapter~\ref{ch:conclusion}.
 
 \section{Summary}
-Both Kaggle reward models score about 59\%, above chance, and are balanced across sources under our 10-point rule; the smaller laptop run reaches 57\%. DPO training goes smoothly in every configuration, but the aligned models are not preferred over the base model overall in the Kaggle runs (50\% win rate), and configuration B shows a strong split by source that the overall figure hides. The laptop run's 57\% win rate on 30 prompts is not significant. The ``2 + 3'' example shows how a small reward model can be fooled. The higher numbers from our earlier paper draft are shown separately and are not reproduced by our code.
+Both Kaggle reward models reach about 59\%, which beats chance, and both pass our 10-point balance rule; the smaller laptop run reaches 57\%. DPO trains without trouble in every configuration, yet in the Kaggle runs the aligned models are not preferred to the base model overall (50\% win rate), and configuration B hides a sharp split by source behind that figure. The laptop's 57\% win rate on 30 prompts is not significant. The ``2 + 3'' case shows how easily a small reward model can be fooled. The paper draft's higher numbers are kept separate, since our code does not reproduce them.

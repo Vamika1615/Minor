@@ -1,12 +1,12 @@
 \chapter{Conclusion and Future Scope}
 \label{ch:conclusion}
 
-We set out to build a preference-alignment pipeline on free hardware and to measure, separately for each data source, what it actually achieves. This chapter checks the work against the objectives of Chapter~\ref{ch:intro}, states our conclusions and the limits of the work, suggests next steps, and records what we learned along the way.
+Our goal was a preference-alignment pipeline that runs on free hardware, with every result measured separately for each data source. Here we hold the work up against the objectives from Chapter~\ref{ch:intro}, state what we conclude and where the work falls short, propose next steps, and note what the project taught us.
 
 \section{What Was Done}
 \label{sec:summary}
 
-We built and ran a pipeline that covers reward modelling and Direct Preference Optimization end to end. It combines two public preference datasets with very different origins: HH-RLHF, labelled by paid annotators following written guidelines, and LMSYS Chatbot Arena, voted on by the public. Both were converted to one format, filtered in the same way, balanced and split so that each split contains both sources. On Kaggle's free T4 GPUs we trained a DeBERTa-v3-base reward model with LoRA and a saved pooler using the Bradley--Terry loss, and aligned a 4-bit TinyLlama-1.1B-Chat with DPO using LoRA, an 8-bit paged optimiser and gradient checkpointing. We did this for two data mixes and reported every result per source. Finally we turned the notebook into a reusable system, a command-line pipeline plus a web application, and trained a smaller version of it from scratch on an 8\,GB Apple M1 laptop.
+We built and ran a pipeline that goes all the way from raw preference data to reward modelling and Direct Preference Optimization. It draws on two public datasets with very different backgrounds: HH-RLHF, labelled by paid annotators working from written guidelines, and LMSYS Chatbot Arena, voted on by the general public. Both were put into one format, filtered by the same rules, balanced, and split so that every split holds both sources. On Kaggle's free T4 GPUs we trained a DeBERTa-v3-base reward model, with LoRA and a saved pooler, on the Bradley--Terry loss, and aligned a 4-bit TinyLlama-1.1B-Chat with DPO using LoRA, a paged 8-bit optimiser and gradient checkpointing. We repeated this for two data mixes and broke every result down by source. Finally, the notebook became a reusable system, a command-line pipeline and a web application, and a smaller version was trained from scratch on an 8\,GB Apple M1 laptop.
 
 \section{Objectives Met}
 \label{sec:achievements}
@@ -35,27 +35,27 @@ O7 & Honest critical analysis & Met & Section~\ref{sec:discussion}; reward-hacki
 \label{sec:conclusions}
 
 \begin{enumerate}
-  \item \textbf{Expert and crowd preferences can be trained on together.} With our conversion and filtering, neither dataset swamps the other. All three reward models rank unseen pairs better than chance and stay within the 10-point balance rule, and in the balanced configuration the accuracy is identical on both sources.
-  \item \textbf{At this size, the reward model is the weak link.} A 184M-parameter encoder with LoRA stays near 57--60\% accuracy whether it sees 1,750, 3,500 or 7,000 training pairs. That limits it both as a training signal and as a judge.
-  \item \textbf{DPO's training numbers do not prove alignment.} Implicit-reward accuracy of 80--95\% came together with a 50\% win rate on new prompts. The training numbers show how well the model fits the stored pairs, not whether its own answers got better.
-  \item \textbf{Results must be split by source.} In configuration B an overall win rate of exactly 50\% hid a significant 24\% against 76\% split between the sources. Looking at the total alone, we would have wrongly concluded that DPO changed nothing.
-  \item \textbf{A small judge can be fooled.} In the ``2 + 3'' case the largest score gain of the whole study went to a wrong answer. Any claim that a model is better aligned needs a judge that is independent of training.
-  \item \textbf{The system is reproducible on modest hardware.} The packaged pipeline retrained everything on an 8\,GB laptop in about one and a half hours, matched the notebook's data counts exactly, and serves the trained models through a web application.
-  \item \textbf{Report what you measure.} The higher numbers in our earlier paper draft could not be reproduced. We report the measured results as the main findings and mark the draft numbers clearly. Saved, re-runnable code is what made this check possible.
+  \item \textbf{Expert and crowd preferences can share one training set.} With our conversion and filtering neither dataset drowns out the other. All three reward models rank unseen pairs better than chance and pass the 10-point balance rule, and the balanced configuration scores exactly the same on both sources.
+  \item \textbf{At this size, the reward model is the bottleneck.} A 184M-parameter encoder with LoRA sits at about 57--60\% accuracy in all three runs, whether it was trained on 1,750, 3,500 or 7,000 pairs. That holds it back both as a training signal and as a judge.
+  \item \textbf{Good DPO training curves are not proof of alignment.} 80--95\% implicit-reward accuracy went hand in hand with a 50\% win rate on new prompts. The training curves measure how well the model fits the stored pairs, not whether the answers it writes got better.
+  \item \textbf{Split the results by source.} In configuration B, an overall win rate of exactly 50\% concealed a significant 24\% versus 76\% split between the two sources. From the total alone we would have concluded, wrongly, that DPO changed nothing.
+  \item \textbf{A small judge is easy to fool.} The single biggest score gain in the whole study, on the ``2 + 3'' prompt, went to a wrong answer. Any claim of better alignment needs a judge that had no part in training.
+  \item \textbf{The system can be reproduced on ordinary hardware.} The packaged pipeline retrained everything on an 8\,GB laptop in about an hour and a half, produced exactly the same data counts as the notebook, and serves the trained models through a web app.
+  \item \textbf{Report what was actually measured.} The higher figures in our earlier paper draft could not be reproduced, so the measured results are the main findings and the draft figures are clearly labelled. Having saved, re-runnable code is what let us make this check.
 \end{enumerate}
 
 \section{Limitations}
 \label{sec:limitations}
 
 \begin{itemize}
-  \item \textbf{The judge is the reward model.} The aligned model is scored by the same kind of reward model it was trained towards. That judge is weak (about 59\%), can be gamed, and is not independent. We did no human rating and used no outside model as judge.
-  \item \textbf{Small samples.} With 15 to 25 prompts per source and one answer per model, only large effects can be detected, and chance has a big influence.
-  \item \textbf{Small models.} Results for a 184M reward model and a 1.1B policy may not hold for 7B models and above.
-  \item \textbf{No supervised fine-tuning on our data.} DPO is applied straight to a chat model, using answers written by other, often much larger, models.
-  \item \textbf{Length cut-offs.} Fields are cut at 1,500 characters and inputs at 512 tokens (256 for DPO on the laptop), which may remove the part of an answer that decided the vote. We did not run a length-controlled evaluation.
-  \item \textbf{Helpfulness only.} We did not measure harmlessness, honesty or factual accuracy, and the reward-hacking example shows that accuracy can get worse.
-  \item \textbf{Few ablations.} Only two Kaggle mixes were run, several settings changed between them, and we never trained single-source reward models for comparison.
-  \item \textbf{The draft's numbers.} The figures in the earlier paper draft are not supported by the code we submit.
+  \item \textbf{The reward model is also the judge.} The aligned model is graded by the same kind of reward model it was trained to please. That judge is weak (around 59\%), gameable and not independent, and we used neither human raters nor an outside model.
+  \item \textbf{Small samples.} With 15--25 prompts per source and one answer per model, only big effects show up, and chance has a lot of say.
+  \item \textbf{Small models.} What holds for a 184M reward model and a 1.1B policy may not hold for models of 7B and up.
+  \item \textbf{No supervised fine-tuning on our data.} DPO is applied directly to a chat model, using answers that other, often far larger, models wrote.
+  \item \textbf{Length limits.} Text fields are capped at 1,500 characters and inputs at 512 tokens (256 for DPO on the laptop), which may cut away exactly the part of an answer that decided the vote. We did not run a length-controlled evaluation.
+  \item \textbf{Helpfulness only.} Harmlessness, honesty and factual accuracy were not measured, and the reward-hacking case shows that accuracy can actually get worse.
+  \item \textbf{Few ablations.} We ran only two Kaggle mixes, changed several settings between them, and never trained single-source reward models to compare against.
+  \item \textbf{The draft's numbers.} The figures in the earlier paper draft are not backed by the code we are submitting.
 \end{itemize}
 
 \section{Future Scope}
@@ -63,45 +63,45 @@ O7 & Honest critical analysis & Met & Section~\ref{sec:discussion}; reward-hacki
 
 \subsection{Better evaluation}
 \begin{itemize}
-  \item Judge base and DPO answers with a strong outside model (a GPT-4-class model or a large open model), swapping the order of the two answers to cancel the position bias noted by Zheng \emph{et al.}~\cite{zheng2023judging}, and run a small blind rating study among students.
-  \item Add standard benchmarks such as MT-Bench, length-controlled AlpacaEval and RewardBench~\cite{lambert2024rewardbench} so our numbers can be compared with published ones.
-  \item Use at least 200 prompts per source with several answers per prompt, and report intervals and significance tests by default.
+  \item Have a strong outside model (GPT-4-class or a large open model) judge base and DPO answers, swapping their order to cancel the position bias reported by Zheng \emph{et al.}~\cite{zheng2023judging}, and run a small blind rating study with fellow students.
+  \item Report standard benchmarks such as MT-Bench, length-controlled AlpacaEval and RewardBench~\cite{lambert2024rewardbench} so that our numbers can be set beside published ones.
+  \item Evaluate on at least 200 prompts per source with several answers each, and always report confidence intervals and significance tests.
 \end{itemize}
 
 \subsection{Better reward models}
 \begin{itemize}
-  \item Try DeBERTa-v3-large, or a 1--2B decoder reward model with QLoRA, and longer inputs.
-  \item Train single-source and mixed reward models with identical settings, so the benefit of mixing is measured directly.
-  \item Give the reward model one output head per source and learn how to combine them.
-  \item Add a third, differently labelled source such as UltraFeedback~\cite{cui2023ultrafeedback} or HelpSteer2~\cite{wang2024helpsteer2}, and remove pairs with low agreement.
+  \item Move to DeBERTa-v3-large, or to a 1--2B decoder reward model trained with QLoRA, with longer inputs.
+  \item Train single-source and mixed reward models under identical settings to measure directly what mixing buys.
+  \item Give the reward model a separate output head for each source and learn how to combine them.
+  \item Bring in a third source with yet another labelling style, such as UltraFeedback~\cite{cui2023ultrafeedback} or HelpSteer2~\cite{wang2024helpsteer2}, and drop pairs where annotators disagree.
 \end{itemize}
 
 \subsection{Better policy training}
 \begin{itemize}
-  \item Fine-tune on the chosen answers before DPO, which completes the InstructGPT recipe and reduces the mismatch between the training answers and the model's own.
-  \item Create preference pairs from TinyLlama's \emph{own} answers, rank them with a strong judge, and repeat DPO in rounds.
-  \item Compare DPO with IPO~\cite{azar2024ipo}, KTO~\cite{ethayarajh2024kto}, ORPO~\cite{hong2024orpo} and SimPO~\cite{meng2024simpo}; KTO could also use LMSYS rows that only have a clear loser or winner.
-  \item Choose $\beta$ and the number of epochs by the per-source win rate on a validation set of prompts rather than by DPO loss.
-  \item Move to a 3--8B policy, for example Llama-3-8B or Mistral-7B with QLoRA, on larger GPUs.
+  \item Run supervised fine-tuning on the chosen answers before DPO. This completes the InstructGPT recipe and narrows the gap between the training answers and the model's own style.
+  \item Build preference pairs from TinyLlama's \emph{own} answers, rank them with a strong judge, and run DPO again in several rounds.
+  \item Compare DPO against IPO~\cite{azar2024ipo}, KTO~\cite{ethayarajh2024kto}, ORPO~\cite{hong2024orpo} and SimPO~\cite{meng2024simpo}; KTO could also make use of LMSYS rows that only have a clear winner or a clear loser.
+  \item Pick $\beta$ and the number of epochs by the per-source win rate on a validation prompt set, not by DPO loss.
+  \item Scale the policy up to 3--8B parameters, for example Llama-3-8B or Mistral-7B with QLoRA, on bigger GPUs.
 \end{itemize}
 
 \subsection{Safety and the application}
 \begin{itemize}
-  \item Add the HH-RLHF harmless-base data and test safety separately, or add a Constitutional-AI-style self-check~\cite{bai2022cai} when generating answers.
-  \item Add a third column to the web application showing an independent judge's verdict next to the reward model's, so reward hacking can be spotted live, and let users record their own vote to collect new preference data.
+  \item Add the HH-RLHF harmless-base split and test safety on its own, or add a Constitutional-AI-style self-check~\cite{bai2022cai} at generation time.
+  \item Give the web app a third column with an independent judge's verdict beside the reward model's, so reward hacking can be caught live, and let users cast their own vote to gather new preference data.
 \end{itemize}
 
 \section{What We Learned}
 \label{sec:learning}
 
 \begin{itemize}
-  \item The theory of preference learning: the Bradley--Terry model, KL-limited reinforcement learning, and why DPO's loss follows from them.
-  \item Training large models on small hardware: LoRA, 4-bit NF4, paged 8-bit optimisers, gradient checkpointing, and their memory costs on CUDA and on Apple's MPS.
-  \item Data work with mixed sources: designing a common format, splitting without leakage, and how small filtering choices can quietly change a dataset.
-  \item Finding failures that raise no error: 16-bit overflow, an unsaved randomly initialised layer, models placed on the wrong GPU, and library version clashes.
-  \item Turning research code into a usable system: a package with clear stages, configuration presets, automatic hardware detection and a web interface.
-  \item Experimental honesty: evaluating by group, knowing how much a small test set can tell you, recognising reward hacking, and reporting null or negative results as clearly as positive ones.
+  \item How preference learning works in theory: the Bradley--Terry model, KL-limited reinforcement learning, and how DPO's loss falls out of the two.
+  \item How to train big models on small hardware with LoRA, 4-bit NF4, paged 8-bit optimisers and gradient checkpointing, and what each costs in memory on CUDA and on Apple's MPS.
+  \item How to work with data from mixed sources: designing a shared format, splitting without leakage, and seeing how a small filtering choice can silently reshape a dataset.
+  \item How to track down failures that throw no error: 16-bit overflow, a randomly initialised layer that was never saved, models on the wrong GPU, and clashing library versions.
+  \item How to turn research code into something usable: a package with clear stages, configuration presets, automatic hardware detection and a web interface.
+  \item Why honesty in experiments matters: evaluating by group, knowing how little a small test set can say, spotting reward hacking, and reporting null or negative results as plainly as positive ones.
 \end{itemize}
 
 \section{Closing Remarks}
-Preference alignment is often described as a fixed recipe: train a reward model, run DPO, report a win rate. Working through it at small scale showed us that every step can fail without warning. Reward models level off, DPO can fit its training pairs without improving what the model writes, and one overall win rate can hide two opposite effects. Mixing datasets labelled in different ways and reporting every number per source turned those hidden failures into results we could see and measure. We consider this the main contribution of our project, and we hope the pipeline and application we built are a useful starting point for the stronger judges, larger reward models and on-policy training described above.
+Preference alignment is often presented as a fixed recipe: train a reward model, run DPO, quote a win rate. Doing it ourselves at small scale showed that any step can go wrong without warning. Reward models plateau, DPO can fit its training pairs without improving what the model writes, and a single win rate can hide two opposite effects. By mixing datasets labelled in different ways and reporting every number per source, we turned those hidden failures into results we could see and measure. We regard this as the main contribution of our project, and we hope the pipeline and application we built give a useful starting point for the stronger judges, larger reward models and on-policy training described above.

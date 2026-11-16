@@ -1,7 +1,7 @@
 \chapter{Implementation}
 \label{ch:impl}
 
-We first built the pipeline as one Kaggle notebook of about fifty cells, arranged in eleven sections that follow the stages of Chapter~\ref{ch:method}. Two runs of that notebook are part of this submission: \texttt{mini-6\_working} (configuration A) and \texttt{mini-7-fixed} (configuration B). They use the same code with a different data mix and different settings. Later we moved the code into a Python package with a command-line runner and a web application, described in Section~\ref{sec:system}. In this chapter we go through the code one module at a time, showing the important parts (shortened, with print statements removed), write the main procedures as algorithms, list the settings of every configuration, and record the problems we ran into and how we solved them.
+We started the pipeline in a single Kaggle notebook of about fifty cells, grouped into eleven sections that follow the stages of Chapter~\ref{ch:method}. Two runs of that notebook are part of this submission: \texttt{mini-6\_working} (configuration A) and \texttt{mini-7-fixed} (configuration B). They use the same code but a different data mix and different settings. We later moved the code into a Python package and added a command-line runner and a web application, described in Section~\ref{sec:system}. In this chapter we go through the code one module at a time, highlighting the important parts (shortened, with print statements removed). We write the main procedures as algorithms, document the settings of each configuration, and record every issue that came up and how it was resolved.
 
 \section{Module Overview}
 \label{sec:modules}
@@ -32,9 +32,9 @@ M10 & Interactive demo & Read user prompts in a loop, compare live, log the sess
 \section{M1: Environment Setup and Persistence}
 \label{sec:m1}
 
-The libraries already installed on Kaggle were older than PEFT 0.19 required, \texttt{torchao} in particular. Our first cells therefore reinstall \texttt{torchao}~$\ge$~0.16, upgrade \texttt{transformers}, \texttt{trl}, \texttt{peft}, \texttt{bitsandbytes} and \texttt{accelerate}, and remove the old copies from \texttt{sys.modules}. We also switch off Weights \& Biases logging through environment variables before importing TRL, because a protobuf version clash in the Kaggle image made that import fail.
+The libraries that come pre-installed on Kaggle were older than PEFT 0.19 needed, \texttt{torchao} in particular. Our first cells therefore reinstall \texttt{torchao}~$\ge$~0.16, upgrade \texttt{transformers}, \texttt{trl}, \texttt{peft}, \texttt{bitsandbytes} and \texttt{accelerate}, and remove the old copies from \texttt{sys.modules}. We also switch off Weights \& Biases logging through environment variables before importing TRL, because a protobuf version clash in the Kaggle image made that import fail.
 
-Kaggle empties \texttt{/kaggle/working} at the end of every session. To avoid retraining each time, a small helper (Listing~\ref{lst:persist}) looks for a saved adapter in the working folder and in any attached input dataset, and the training stage is skipped when one is found.
+At the end of each session \texttt{/kaggle/working} is emptied. To avoid retraining every time, a small helper (Listing~\ref{lst:persist}) searches for an adapter that has already been saved, first in the working folder and then in any attached input dataset. If one is found, the training stage is not run.
 
 \begin{lstlisting}[caption={Locating previously saved adapters across Kaggle sessions.}, label={lst:persist}]
 import os, glob
@@ -63,7 +63,7 @@ All random generators (\texttt{random}, NumPy, PyTorch CPU and CUDA) are seeded 
 \section{M2: HH-RLHF Loader and Parser}
 \label{sec:m2}
 
-An HH-RLHF row holds the whole conversation twice, once ending in the chosen reply and once in the rejected one. We take the prompt to be everything before the \emph{last} \verb|\n\nAssistant:| marker in the chosen copy, and each response to be what comes after that marker in its own copy (Listing~\ref{lst:hh}). Searching from the end (\texttt{rfind}) keeps the earlier turns of a multi-turn chat inside the prompt. A row without the marker is returned empty and dropped later; this removed 52 of the 43,835 rows.
+In an HH-RLHF row the entire conversation appears twice: once ending in the chosen response and once ending in the rejected one. We take the prompt to be everything before the \emph{last} \verb|\n\nAssistant:| marker in the chosen copy, and each response to be whatever follows that marker in its own copy (Listing~\ref{lst:hh}). Searching from the end (\texttt{rfind}) keeps the earlier rounds of a multi-turn conversation inside the prompt. A row in which the marker is not found is returned empty and dropped later; this removed 52 of the 43,835 rows.
 
 \begin{lstlisting}[caption={Parsing HH-RLHF dialogues into the common schema.}, label={lst:hh}]
 from datasets import load_dataset
@@ -91,7 +91,7 @@ hh_records = [r for r in parsed if r["prompt"] and r["chosen"] and r["rejected"]
 \section{M3: LMSYS Loader and Parser}
 \label{sec:m3}
 
-In the LMSYS file the conversation fields are Python or JSON lists stored as text, and \texttt{pandas} sometimes turns empty cells into \texttt{NaN}. Our \texttt{safe\_parse} function tries \texttt{ast.literal\_eval} first, then \texttt{json.loads}, and as a last resort wraps the raw value in a list. We strip spaces from the column names and check that all expected columns exist before looping over rows. When a chat has several turns we keep only the last user message and the last two replies. The reason is that the earlier replies on side A and side B were written by \emph{different} models, so copying one side's history into the shared prompt would give the other side a context it never saw.
+In the LMSYS file the conversation fields are Python or JSON lists stored as text, and \texttt{pandas} sometimes converts empty cells to \texttt{NaN}. Our \texttt{safe\_parse} function calls \texttt{ast.literal\_eval} first, then \texttt{json.loads}, and only as a last resort wraps the raw value in a list. We remove spaces from the column names and make sure the required columns exist before looping over the rows. If a chat has multiple turns, we store only the last user message and the last two responses. The reason is that the earlier answers on side A and side B were produced by \emph{different} models; copying side A's history into the shared prompt would give side B a context it had never been shown.
 
 \begin{lstlisting}[caption={Parsing LMSYS Chatbot Arena rows into the common schema.}, label={lst:lmsys}]
 import ast, json, pandas as pd
@@ -140,7 +140,7 @@ for row in lmsys_df.itertuples(index=False):
 \label{sec:m4}
 
 \subsection{Truncate-and-filter}
-LMSYS replies are noticeably longer than HH-RLHF replies (Figure~\ref{fig:m6-dataset}). Our first version threw away any record with a field over 1,500 characters. Since multi-turn prompts are long, this quietly removed most multi-turn LMSYS chats, which was the very variety we wanted LMSYS for. The final version \emph{shortens} every field to 1,500 characters and only throws away records with a field under 20 characters.
+LMSYS replies are clearly longer than HH-RLHF replies (Figure~\ref{fig:m6-dataset}). Our first version deleted any record with more than 1,500 characters in a field. Since multi-turn prompts are long, this quietly took most multi-turn LMSYS chats out of the data, even though that variety was exactly why we chose LMSYS. The final version \emph{shortens} each field to 1,500 characters and only discards records in which a field has fewer than 20 characters.
 
 \begin{lstlisting}[caption={Uniform truncate-and-filter applied to both sources.}, label={lst:filter}]
 MAX_CHARS, MIN_CHARS = 1500, 20
@@ -160,7 +160,7 @@ lmsys_clean = [o for r in lmsys_records for o in [truncate_and_filter(r)] if o]
 \end{lstlisting}
 
 \subsection{Balancing and stratified split}
-After shuffling both cleaned lists with the fixed seed, we take a set number of records from each: 2,000 and 2,000 in configuration A, and 6,000 HH-RLHF with 2,000 LMSYS in configuration B. The heavier HH share in B tested our guess that the cleaner expert labels would give a stronger training signal. Algorithm~\ref{alg:split} shows how the split is made.
+We shuffle both cleaned lists with the fixed seed and then take a set number of records from each: 2,000 and 2,000 in configuration A, and 6,000 HH-RLHF with 2,000 LMSYS in configuration B. The heavier HH-RLHF share in B tested our hypothesis that the cleaner expert labels would provide a better training signal. Algorithm~\ref{alg:split} gives the split procedure.
 
 \begin{algobox}{Source-stratified train/validation/test split}\label{alg:split}
 \begin{lstlisting}[style=algo]
@@ -220,7 +220,7 @@ The LMSYS example shows why crowd labels are noisy: the two responses are very s
 \label{sec:m5}
 
 \subsection{Model construction}
-We load the reward model with \texttt{AutoModelForSequenceClassification} and \texttt{num\_labels=1}, in FP32 (Section~\ref{sec:impl-fixes} explains why). LoRA goes on DeBERTa's attention projections, which are called \texttt{query\_proj}, \texttt{key\_proj} and \texttt{value\_proj}, not the Llama names.
+The reward model is built with \texttt{AutoModelForSequenceClassification}, using \texttt{num\_labels=1} and FP32 (Section~\ref{sec:impl-fixes} explains why). LoRA goes on DeBERTa's attention projections, which are called \texttt{query\_proj}, \texttt{key\_proj} and \texttt{value\_proj} rather than by the Llama names.
 
 \begin{lstlisting}[caption={Building the DeBERTa-v3 reward model with LoRA (configuration A).}, label={lst:rmbuild}]
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
@@ -250,7 +250,7 @@ reward_model.print_trainable_parameters()
 \end{lstlisting}
 
 \subsection{Training}
-TRL's \texttt{RewardTrainer} does the tokenising itself: it builds (prompt, chosen) and (prompt, rejected) inputs, adds an end-of-sequence token, drops pairs over the length limit, and minimises the Bradley--Terry loss~\eqref{eq:rmloss}.
+\texttt{RewardTrainer} from TRL does the tokenising for us. It builds the (prompt, chosen) and (prompt, rejected) inputs, adds an end-of-sequence token, drops pairs that exceed the length limit, and minimises the Bradley--Terry loss~\eqref{eq:rmloss}.
 
 \begin{lstlisting}[caption={Reward-model training with TRL (configuration A).}, label={lst:rmtrain}]
 from trl import RewardConfig, RewardTrainer
@@ -283,7 +283,7 @@ json.dump(rm_trainer.state.log_history,
 \section{M6: Reward Scoring and Per-Source Evaluation}
 \label{sec:m6}
 
-The scoring functions send inputs to whichever device actually holds the model (on a two-GPU machine \texttt{device\_map=\textquotedbl{}auto\textquotedbl{}} can put it on \texttt{cuda:1}). Every score is checked for NaN or infinity, and a warning is printed directly so that warning filters cannot hide it.
+The scoring functions send inputs to the device on which the model is actually stored (on a two-GPU machine \texttt{device\_map=\textquotedbl{}auto\textquotedbl{}} can put it on \texttt{cuda:1}). Every score is checked for NaN or infinity, and a warning is printed directly so that warning filters cannot hide it.
 
 \begin{lstlisting}[caption={Batched reward scoring with device-safe placement and NaN guards.}, label={lst:score}]
 @torch.no_grad()
@@ -316,13 +316,13 @@ if $|$acc$_{hh}$ $-$ acc$_{lmsys}|$ $< 0.10$ then BALANCED else IMBALANCED
 \end{lstlisting}
 \end{algobox}
 
-The evaluation also produces a $2\times3$ figure of chosen/rejected score histograms and reward-gap histograms for each subset (Chapter~\ref{ch:results}).
+The evaluation also generates a $2\times3$ figure with histograms of the chosen and rejected scores and of the reward gaps for each subset of the data (Chapter~\ref{ch:results}).
 
 \section{M7: DPO Alignment}
 \label{sec:m7}
 
 \subsection{Loading the 4-bit policy}
-The policy is loaded through an NF4 \texttt{BitsAndBytesConfig} with FP16 as the compute type, since the T4 has no BF16 arithmetic. Passing \texttt{torch\_dtype=float16} makes the layers that are not quantised (embeddings and output head) FP16 as well. \texttt{prepare\_model\_for\_kbit\_training} then moves the normalisation layers to FP32 and enables input gradients for checkpointing.
+The policy is loaded using an NF4 \texttt{BitsAndBytesConfig} with FP16 as the compute type, as the T4 has no BF16 arithmetic. Passing \texttt{torch\_dtype=float16} makes the layers that are not quantised (embeddings and output head) FP16 as well. Next, \texttt{prepare\_model\_for\_kbit\_training} moves the normalisation layers to FP32 and enables input gradients for checkpointing.
 
 \begin{lstlisting}[caption={Loading TinyLlama-1.1B-Chat in 4-bit NF4.}, label={lst:policy}]
 from transformers import AutoModelForCausalLM, BitsAndBytesConfig
@@ -344,7 +344,7 @@ policy_model = prepare_model_for_kbit_training(policy_model)
 \end{lstlisting}
 
 \subsection{Preparing preference pairs}
-Each prompt is wrapped in TinyLlama's chat template with the assistant prefix added, so DPO computes probabilities on the same format the model will see when answering. Configuration A draws 1,500 random training pairs (776 HH-RLHF, 724 LMSYS); configuration B draws 2,000 HH-RLHF and 1,000 LMSYS pairs. Both use 200 validation pairs.
+First, each prompt is enclosed in TinyLlama's chat template with the assistant prefix included, so that DPO computes probabilities on the same format the model will see when it answers. Configuration A uses 1,500 random training pairs (776 HH-RLHF, 724 LMSYS), and configuration B uses 2,000 HH-RLHF and 1,000 LMSYS pairs. Both use 200 validation pairs.
 
 \begin{lstlisting}[caption={Formatting DPO training pairs with the chat template.}, label={lst:dpofmt}]
 def format_for_dpo(ex):
@@ -359,7 +359,7 @@ dpo_train_ds = Dataset.from_pandas(dpo_train_df[["prompt","chosen","rejected"]])
 \end{lstlisting}
 
 \subsection{DPO training}
-We pass \texttt{DPOTrainer} the 4-bit model, a \texttt{peft\_config} and \texttt{ref\_model=None}. TRL then gets the reference probabilities by switching the LoRA adapters off for a moment, so a single copy of the base weights serves as both policy and reference.
+We pass \texttt{DPOTrainer} the 4-bit model, a \texttt{peft\_config} and \texttt{ref\_model=None}. TRL then switches the LoRA adapters off for a moment to get the reference probabilities, so one set of base weights is used for both the policy and the reference.
 
 \begin{lstlisting}[caption={DPO configuration and training (configuration A; configuration B values in comments).}, label={lst:dpotrain}]
 from trl import DPOConfig, DPOTrainer
@@ -394,7 +394,7 @@ dpo_trainer.save_model(FINETUNED_LLM_PATH)
 \section{M8: Generation and Side-by-Side Comparison}
 \label{sec:m8}
 
-For the evaluation we load a plain 4-bit base model and a second 4-bit copy carrying the saved DPO adapter, which together with the reward model use about 1.5\,GB of GPU memory. Both models sample with temperature 0.7, top-$p$ 0.9, repetition penalty 1.15 and at most 200 new tokens.
+For the evaluation, a plain 4-bit base model is loaded together with a second 4-bit copy carrying the saved DPO adapter; with the reward model, these use about 1.5\,GB of GPU memory. Both models sample with temperature 0.7, top-$p$ 0.9, a repetition penalty of 1.15 and at most 200 new tokens.
 
 \begin{lstlisting}[caption={Generating and comparing base and DPO responses.}, label={lst:compare}]
 @torch.no_grad()
@@ -441,7 +441,7 @@ save per-prompt results to batch_eval.csv; plot win rates, score histograms, sor
 \section{M10: Interactive Demonstration}
 \label{sec:m10}
 
-The last notebook cell is a live loop for demonstrations. A user types a prompt, both models answer, both answers are scored, and the cell prints the winner and the percentage change. Typing \texttt{quit}, \texttt{exit} or \texttt{q} stops the loop and saves the session to \texttt{interactive\_session.csv}. When the notebook is run with ``Run All'' there is no keyboard, so the cell catches the resulting \texttt{EOFError} and skips itself. The web application of Section~\ref{sec:system} replaces this loop with a proper interface.
+The final notebook cell is a live loop for demonstrations. A user enters a question, both models respond, both responses are scored, and the cell prints the winner and the percentage change. Typing \texttt{quit}, \texttt{exit} or \texttt{q} ends the loop and saves the session to \texttt{interactive\_session.csv}. When the notebook is run with ``Run All'' there is no keyboard input; the resulting \texttt{EOFError} is caught and the cell skips itself. In the web application of Section~\ref{sec:system} this loop is replaced by a proper interface.
 
 \section{Hyper-parameters of the Two Configurations}
 \label{sec:hparams}
@@ -503,7 +503,7 @@ Optimiser & \multicolumn{2}{c}{paged AdamW 8-bit, gradient checkpointing}\\
 \section{From Notebook to a Working System}
 \label{sec:system}
 
-A notebook is convenient for experiments but awkward to reuse: cells depend on each other's variables, the code assumes Kaggle paths, and showing the result to someone means re-running half the notebook. Once the experiments were finished we reorganised the same code into a small system, \texttt{rlhf\_system}, with two entry points. The first is a command-line runner that executes the pipeline stage by stage. The second is a web application that loads the trained models and lets anyone compare the two chat models from a browser. The training logic is unchanged from the notebooks, so a model trained by either one can be loaded by the other.
+A notebook is helpful for experiments but cumbersome to reuse: cells depend on each other's variables, the code assumes Kaggle paths, and showing the results to someone means re-running half of the notebook. After the experiments were complete we reorganised the same code into a small system called \texttt{rlhf\_system} with two entry points. One is a command-line runner that executes the pipeline stage by stage. The other is a web application that loads the trained models and lets anyone compare the two chat models from a browser. The training logic is unchanged from the notebooks, so a model trained by either one can be loaded by the other.
 
 \subsection{Package structure}
 
@@ -528,12 +528,12 @@ A notebook is convenient for experiments but awkward to reuse: cells depend on e
 \end{tabularx}
 \end{table}
 
-A complete run is a single command, for example \texttt{python run\_pipeline.py -{}-config A} on Kaggle, or \texttt{-{}-config local} on the laptop. Because each stage checks for its own output first, the same command also resumes a run that was interrupted.
+A complete run is a single command, for example \texttt{python run\_pipeline.py -{}-config A} on Kaggle, or \texttt{-{}-config local} on the laptop. Because each stage first checks for its own output, the same command also restarts a run that was interrupted.
 
 \subsection{Running on three kinds of hardware}
-The loader in \texttt{rlhf/models.py} checks what hardware is present and picks matching settings. On an NVIDIA GPU it uses exactly the notebook set-up: NF4 weights with FP16 compute. On an Apple Silicon Mac, where bitsandbytes is not available, TinyLlama is loaded in plain FP16 on the MPS backend. On a machine with neither it falls back to FP32 on the CPU, which is slow but works. The reward model always runs in FP32, for the reason given in Section~\ref{sec:impl-fixes}.
+The loader in \texttt{rlhf/models.py} checks what hardware is available and selects matching settings. On an NVIDIA GPU it uses the same arrangement as the notebook: NF4 weights with FP16 compute. On an Apple Silicon Mac, which bitsandbytes does not support, TinyLlama is loaded in plain FP16 on the MPS backend. On a machine with neither, it falls back to FP32 on the CPU, which is slow but works. The reward model always runs in FP32, for the reason stated in Section~\ref{sec:impl-fixes}.
 
-One detail matters a lot on an 8\,GB laptop. The base model and the DPO model differ only by the LoRA adapter, so the application keeps a single copy of TinyLlama and switches the adapter off when it needs the base model's answer (Listing~\ref{lst:policypair}). This halves the memory needed compared with loading two copies, as the notebook did.
+On an 8\,GB laptop one detail is crucial. The base model and the DPO model differ only by the LoRA adapter, so the application keeps one copy of TinyLlama and turns the adapter off when it needs the base model's answer (Listing~\ref{lst:policypair}). This halves the memory needed compared with loading two copies, as the notebook did.
 
 \begin{lstlisting}[caption={One TinyLlama copy serves both the base and the DPO model.}, label={lst:policypair}]
 class PolicyPair:
@@ -556,7 +556,7 @@ class PolicyPair:
 \end{lstlisting}
 
 \subsection{The local configuration}
-The full configurations need a CUDA GPU. To have a version that trains on the team's own laptop, we added configuration \emph{local}: the method of configuration A on fewer pairs with shorter inputs (Table~\ref{tab:local-hparams}). On Kaggle the LMSYS file is attached as a competition dataset. Outside Kaggle the loader downloads the identical public copy from the HuggingFace Hub instead. The record counts it produced (43,783 valid HH-RLHF pairs, 39,678 valid LMSYS pairs, 17,761 ties removed) match the notebook exactly.
+The full configurations require a CUDA GPU. To get a version that trains on the team's own laptop, we added configuration \emph{local}: the method of configuration A with fewer pairs and shorter inputs (Table~\ref{tab:local-hparams}). On Kaggle the LMSYS file is attached as a competition dataset; outside Kaggle the loader downloads the identical public copy from the HuggingFace Hub instead. The record counts it produced (43,783 valid HH-RLHF pairs, 39,678 valid LMSYS pairs, 17,761 ties removed) match the notebook exactly.
 
 \begin{table}[!htbp]
 \centering
@@ -583,7 +583,7 @@ Measured training time & $\approx$ 2.5--3 h (whole run) & RM 58 min, DPO 22 min,
 \end{table}
 
 \subsection{The web application}
-Figure~\ref{fig:apparch} shows how a request travels through the application. When it starts, the application looks for trained adapters, first in \texttt{models/} (where downloaded Kaggle models go) and then in the pipeline's output folders, and loads TinyLlama once and the reward model once. Each click on \emph{Compare} produces two answers with the same sampling settings and seed, scores both, and shows the winner. If no adapters are found, the application still starts in a base-only mode and says so.
+Figure~\ref{fig:apparch} illustrates the path of a request through the application. On start-up the application looks for trained adapters, first in \texttt{models/} (where downloaded Kaggle models go) and then in the pipeline's output folders, and loads TinyLlama once and the reward model once. Each click on \emph{Compare} produces two answers with the same sampling settings and seed; both are scored and the winner is displayed. If no adapters are found, the application still launches in a base-only mode and says so.
 
 \begin{figure}[H]
 \centering
@@ -606,7 +606,7 @@ Figure~\ref{fig:apparch} shows how a request travels through the application. Wh
 \label{fig:apparch}
 \end{figure}
 
-The interface has three tabs. \emph{Compare} (Figures~\ref{fig:ui-top} and~\ref{fig:ui-answers}) shows which models are loaded, a prompt box with example prompts, a coloured result banner, the two answers side by side with their reward scores, and a history of the session that can be saved as CSV. \emph{Results} (Figure~\ref{fig:ui-results}) reads \texttt{metrics.json} for the loaded models and shows the per-source tables of Chapter~\ref{ch:results}. \emph{About} (Figure~\ref{fig:ui-about}) summarises the pipeline and the Kaggle results for viewers who have not read this report.
+There are three tabs in the interface. \emph{Compare} (Figures~\ref{fig:ui-top} and~\ref{fig:ui-answers}) shows which models are loaded, a prompt box with example prompts, a coloured result banner, the two answers side by side with their reward scores, and a session history that can be exported as CSV. \emph{Results} (Figure~\ref{fig:ui-results}) loads the \texttt{metrics.json} file of the loaded models and shows the per-source tables of Chapter~\ref{ch:results}. \emph{About} (Figure~\ref{fig:ui-about}) summarises the pipeline and the Kaggle results for viewers who have not read this report.
 
 \begin{figure}[H]
 \centering
@@ -639,7 +639,7 @@ The interface has three tabs. \emph{Compare} (Figures~\ref{fig:ui-top} and~\ref{
 \section{Engineering Challenges and Fixes}
 \label{sec:impl-fixes}
 
-Getting current versions of Transformers, TRL and PEFT to work on a T4, and later on an M1 laptop, threw up a series of problems, and several of them gave no error at all. Table~\ref{tab:fixes} lists them, and the most important ones are explained after the table.
+Getting current versions of Transformers, TRL and PEFT to run on a T4, and later on an M1 laptop, produced a string of issues, and some of them did not report any error at all. They are listed in Table~\ref{tab:fixes}, and the most important ones are explained after the table.
 
 {\footnotesize
 \begin{longtable}{@{}L{0.5cm}L{4.0cm}L{4.3cm}L{5.0cm}@{}}
@@ -671,9 +671,9 @@ Getting current versions of Transformers, TRL and PEFT to work on a T4, and late
 \end{longtable}
 }
 
-\paragraph{The pooler problem (fix 3).} This was the hardest bug to find. In DeBERTa the classification head is a pooler followed by a classifier. Neither is part of the downloaded checkpoint (the loading report marks both \texttt{MISSING}), so both start with random values. With \texttt{TaskType.SEQ\_CLS}, PEFT trains and saves the classifier on its own, but the pooler, with 590,592 parameters, stayed frozen at its random start and was never saved. When a later cell loaded the reward model again, it received a \emph{new} random pooler, and the trained adapters and classifier were now attached to a layer they had never seen. As a result, scores at evaluation time did not match scores during training. Adding \texttt{modules\_to\_save=[\textquotedbl{}pooler\textquotedbl{}]} makes the pooler trainable, stores it with the adapter, and \texttt{PeftModel.from\_pretrained} puts it back exactly.
+\paragraph{The pooler problem (fix 3).} This was the most difficult bug to locate. In DeBERTa the classification head consists of a pooler and a classifier. Neither is part of the downloaded checkpoint (the loading report marks both as \texttt{MISSING}), so both start with random values. With \texttt{TaskType.SEQ\_CLS}, PEFT trains and saves the classifier on its own, but the pooler, with 590,592 parameters, stayed frozen at its random start and was not saved at all. When a later cell loaded the reward model again it received a \emph{new} random pooler, and the trained adapters and classifier were now attached to a layer they had never been trained with. As a result, the scores at evaluation time did not match the scores during training. Adding \texttt{modules\_to\_save=[\textquotedbl{}pooler\textquotedbl{}]} makes the pooler trainable; it is stored with the adapter and restored exactly by \texttt{PeftModel.from\_pretrained}.
 
-\paragraph{Number formats (fixes 1, 2 and 16).} Our two models need opposite settings. DeBERTa-v3 has to run in FP32 because its attention overflows in 16-bit. TinyLlama's 4-bit layers have to compute in FP16, because the T4 cannot do BF16 and mixing BF16 weights with an FP16 gradient scaler crashes. Turning off the trainers' mixed-precision options removes the gradient scaler completely, and memory is already saved by the 4-bit weights and LoRA. On the 8\,GB M1 laptop the policy cannot be quantised (bitsandbytes needs CUDA), so it runs in plain FP16, and DPO had to be cut to one pair per step with 256-token inputs to fit.
+\paragraph{Number formats (fixes 1, 2 and 16).} Our two models have to be set up differently. DeBERTa-v3's attention overflows in 16-bit, so it has to run in FP32. Because the T4 cannot compute in BF16, TinyLlama's 4-bit layers have to compute in FP16, and mixing BF16 weights with an FP16 gradient scaler breaks training. The gradient scaler disappears once the trainers' mixed-precision options are turned off, and memory is already saved by the 4-bit weights and LoRA. On the 8\,GB M1 laptop the policy cannot be quantised (bitsandbytes needs CUDA), so it runs in plain FP16, and DPO had to be reduced to one pair per step with 256-token inputs so that it would fit.
 
 \section{Summary}
-In this chapter we walked through the ten modules: the environment and saving logic, the two dataset parsers, the shared filter and per-source split, the DeBERTa-v3 reward model, 4-bit DPO training of TinyLlama, and the generation, evaluation and live-demo code. We then showed how this code became a reusable package and web application, listed the settings of every configuration, and recorded the problems we fixed. Some of them, such as the unsaved pooler, would have silently ruined the evaluation if they had not been caught. Chapter~\ref{ch:results} presents the results.
+To recap, in this chapter we walked through the ten modules: the environment and saving logic, the two dataset parsers, the shared filter and per-source split, the DeBERTa-v3 reward model, 4-bit DPO training of TinyLlama, and the generation, evaluation and live-demo code. We then showed how this code was packaged into a reusable module and web application, wrote down the settings of each configuration, and recorded the problems we fixed. Some of them, such as the unsaved pooler, would have silently ruined the evaluation if they had not been caught. The results are reported in Chapter~\ref{ch:results}.

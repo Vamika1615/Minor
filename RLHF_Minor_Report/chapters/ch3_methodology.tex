@@ -1,18 +1,18 @@
 \chapter{System Design and Methodology}
 \label{ch:method}
 
-Our system takes two preference datasets that were never meant to be used together and turns them into a trained reward model, an aligned chat model and a set of results split by data source. In this chapter we lay out how the pieces fit: the overall architecture, data-flow diagrams at three levels, the order in which a run executes, the maths behind each training step, the two model architectures, the data, the measures we report, and the software and hardware we used. We finish with a table of the main design decisions and the reason for each.
+We start with two preference datasets that were never designed to work together, and end with a trained reward model, an aligned chat model and a results table broken down by source. This chapter explains how that happens. It covers the architecture, data-flow diagrams at three levels, the order of steps in a run, the mathematics behind each training stage, the two network designs, the data, the metrics, and the hardware and software. A table of our main design choices, with the reason behind each, closes the chapter.
 
 \section{Proposed Architecture}
 \label{sec:arch}
 
-We split the work into four stages that run one after another (Figure~\ref{fig:arch}). Every stage writes its result to disk, and a stage is skipped when its result is already there, so a run that stops halfway can carry on where it left off.
+The pipeline has four stages that run in sequence (Figure~\ref{fig:arch}). Each stage saves its output to disk and is skipped next time if that output already exists, so an interrupted run simply resumes.
 
 \begin{enumerate}
-  \item \textbf{Dataset preparation:} read both sources, convert them to one format, clean, balance and split them so each split contains both sources.
-  \item \textbf{Reward model:} a DeBERTa-v3-base classifier with a single output, LoRA adapters and a trainable pooler, fitted with the Bradley--Terry loss.
-  \item \textbf{DPO:} TinyLlama-1.1B-Chat in 4-bit with LoRA adapters, trained with the DPO loss; the reference model is the same network with its adapters switched off.
-  \item \textbf{Evaluation:} reward-model accuracy per source on the test split, and base versus DPO answers on demo and held-out prompts, scored by the reward model.
+  \item \textbf{Dataset preparation:} load both sources, bring them into a single format, clean and balance them, and split them so that both sources appear in every split.
+  \item \textbf{Reward model:} DeBERTa-v3-base with a one-number output, LoRA adapters and a trainable pooler, trained on the Bradley--Terry loss.
+  \item \textbf{DPO:} 4-bit TinyLlama-1.1B-Chat with LoRA adapters, trained on the DPO loss; switching the adapters off gives the reference model, so no second copy is loaded.
+  \item \textbf{Evaluation:} per-source accuracy of the reward model on the test split, plus base-versus-DPO comparisons on demo and held-out prompts, with the reward model as judge.
 \end{enumerate}
 
 \begin{figure}[H]
@@ -38,7 +38,7 @@ We split the work into four stages that run one after another (Figure~\ref{fig:a
 \label{sec:dfd}
 
 \subsection{Level-0 DFD (context diagram)}
-Seen from outside (Figure~\ref{fig:dfd0}), the system talks to three kinds of external party: the two dataset providers (HuggingFace Hub for HH-RLHF and Kaggle for LMSYS), the pre-trained model hub (HuggingFace Hub for DeBERTa-v3 and TinyLlama) and the user/evaluator who supplies prompts and receives comparisons and reports.
+From the outside (Figure~\ref{fig:dfd0}) the system deals with three external parties: the dataset providers (HuggingFace Hub for HH-RLHF, Kaggle for LMSYS), the model hub that supplies DeBERTa-v3 and TinyLlama, and the user or evaluator, who types prompts and gets back comparisons and reports.
 
 \begin{figure}[H]
 \centering
@@ -63,7 +63,7 @@ Seen from outside (Figure~\ref{fig:dfd0}), the system talks to three kinds of ex
 \end{figure}
 
 \subsection{Level-1 DFD}
-Figure~\ref{fig:dfd1} opens up the system into five processes and four stores. D1 keeps the split dataset, D2 the reward-model adapter with its training log, D3 the DPO adapter with its log, and D4 the evaluation files (CSV tables and plots).
+Figure~\ref{fig:dfd1} breaks the system into five processes and four data stores: D1 holds the split dataset, D2 the reward-model adapter and its log, D3 the DPO adapter and its log, and D4 the evaluation outputs (CSV files and plots).
 
 \begin{figure}[H]
 \centering
@@ -130,7 +130,7 @@ Process 1.0 is the most intricate part of the data engineering. Figure~\ref{fig:
 \section{Execution Flowchart}
 \label{sec:flow}
 
-A Kaggle session has a time limit and its working folder is emptied when it ends. We therefore wrote each training stage so that it first looks for a saved model and trains only when none is found. Figure~\ref{fig:flowchart} follows one full run through these checks.
+Kaggle sessions time out, and the working folder is wiped when they do. For that reason every training stage first checks for a saved model and only trains if it finds none. Figure~\ref{fig:flowchart} traces one complete run through these checks.
 
 \begin{figure}[H]
 \centering
@@ -171,10 +171,10 @@ A Kaggle session has a time limit and its working folder is emptied when it ends
 \label{sec:math}
 
 \subsection{Problem setting}
-Let $\mathcal{D} = \{(x^{(i)}, y_c^{(i)}, y_r^{(i)}, s^{(i)})\}_{i=1}^{N}$ be the combined preference dataset, where $x$ is a prompt, $y_c$ the response preferred by the annotator (chosen), $y_r$ the dispreferred response (rejected), and $s\in\{\textsc{hh}, \textsc{lmsys}\}$ the source tag. The tag is never shown to either model; it is used only for stratified splitting and per-source evaluation.
+We write the combined preference data as $\mathcal{D} = \{(x^{(i)}, y_c^{(i)}, y_r^{(i)}, s^{(i)})\}_{i=1}^{N}$. Here $x$ is the prompt, $y_c$ the answer the annotator picked (chosen), $y_r$ the one they did not pick (rejected), and $s\in\{\textsc{hh}, \textsc{lmsys}\}$ says which dataset the row came from. Neither model ever sees $s$; it is only used to split the data and to break the results down.
 
 \subsection{Reward model and the Bradley--Terry loss}
-The reward model $r_\phi(x,y)\in\mathbb{R}$ maps a prompt--response pair to a scalar score. Under the Bradley--Terry model~\cite{bradley1952rank}, the probability that $y_c$ is preferred over $y_r$ is
+The reward model $r_\phi(x,y)\in\mathbb{R}$ gives each prompt--answer pair a single real-valued score. Following Bradley and Terry~\cite{bradley1952rank}, the chance that $y_c$ wins against $y_r$ is
 \begin{equation}
   P(y_c \succ y_r \mid x) \;=\; \frac{\exp(r_\phi(x,y_c))}{\exp(r_\phi(x,y_c)) + \exp(r_\phi(x,y_r))} \;=\; \sigma\big(r_\phi(x,y_c) - r_\phi(x,y_r)\big).
   \label{eq:bt}
@@ -184,13 +184,13 @@ Maximising the log-likelihood of the observed preferences gives the reward-model
   \mathcal{L}_{\mathrm{RM}}(\phi) \;=\; -\,\mathbb{E}_{(x,y_c,y_r)\sim\mathcal{D}}\Big[\log\sigma\big(r_\phi(x,y_c) - r_\phi(x,y_r)\big)\Big].
   \label{eq:rmloss}
 \end{equation}
-When the two scores are equal, as they are at the start, the loss is exactly $\log 2 \approx 0.693$. This is the line to compare the training curves of Chapter~\ref{ch:results} against. Since only the \emph{difference} between the two scores enters the loss, adding a constant to every score changes nothing. That is why the average scores we report later are negative for chosen and rejected answers alike: the sign carries no meaning, and only the gap between them does.
+At the start both scores are the same, so the loss sits at exactly $\log 2 \approx 0.693$; the training curves in Chapter~\ref{ch:results} should be read against this line. The loss only depends on the \emph{difference} of the two scores, so shifting every score by the same constant has no effect. This is why the mean scores we report later are negative for chosen and rejected answers alike. The sign means nothing; only the gap does.
 
 The gradient with respect to $\phi$ for one pair is
 \begin{equation}
   \nabla_\phi\mathcal{L} = -\big(1-\sigma(\Delta r)\big)\big(\nabla_\phi r_\phi(x,y_c) - \nabla_\phi r_\phi(x,y_r)\big),\qquad \Delta r = r_\phi(x,y_c)-r_\phi(x,y_r),
 \end{equation}
-so pairs that the model already ranks correctly with a large margin contribute almost nothing, and wrongly ranked pairs contribute most.
+In other words, a pair the model already ranks correctly by a wide margin barely moves the weights, while a pair it ranks the wrong way gets the biggest update.
 
 \subsection{KL-constrained reward maximisation}
 The policy-optimisation objective of RLHF~\cite{ziegler2019finetuning,ouyang2022instructgpt} is
@@ -222,14 +222,14 @@ Replacing $\pi^*$ with the parameterised policy $\pit$ and maximising the likeli
   \end{split}
   \label{eq:dpo}
 \end{equation}
-We call $\hat r_\theta(x,y) = \beta\log\frac{\pit(y\mid x)}{\piref(y\mid x)}$ the \emph{implicit reward}. During training, TRL records its average over chosen answers (\texttt{rewards/chosen}) and rejected answers (\texttt{rewards/rejected}), the gap between the two (\texttt{rewards/margins}), and the share of pairs where the gap is positive (\texttt{rewards/accuracies}). These four numbers are the training curves shown in Chapter~\ref{ch:results}.
+The quantity $\hat r_\theta(x,y) = \beta\log\frac{\pit(y\mid x)}{\piref(y\mid x)}$ is called the \emph{implicit reward}. While training, TRL logs its mean on chosen answers (\texttt{rewards/chosen}) and on rejected answers (\texttt{rewards/rejected}), the difference between them (\texttt{rewards/margins}), and the fraction of pairs with a positive difference (\texttt{rewards/accuracies}). Chapter~\ref{ch:results} plots these four values.
 
 \subsection{Gradient of the DPO loss}
 The gradient of~\eqref{eq:dpo} is
 \begin{equation}
   \nabla_\theta\mathcal{L}_{\mathrm{DPO}} = -\beta\,\mathbb{E}\Big[\underbrace{\sigma\big(\hat r_\theta(x,y_r)-\hat r_\theta(x,y_c)\big)}_{\text{weight: larger when ranking is wrong}}\big(\nabla_\theta\log\pit(y_c\mid x) - \nabla_\theta\log\pit(y_r\mid x)\big)\Big].
 \end{equation}
-In words, each step makes the chosen answer more likely and the rejected answer less likely, and pairs that the model currently gets wrong receive the largest push. Larger $\beta$ means a sharper sigmoid and a stronger pull back toward $\piref$.
+Put simply, every update raises the probability of the chosen answer and lowers that of the rejected one, and the pairs the model currently ranks wrongly get pushed hardest. A larger $\beta$ makes the sigmoid steeper and pulls the policy more firmly back towards $\piref$.
 
 \subsection{Low-rank adaptation}
 For a frozen pre-trained weight $W_0\in\mathbb{R}^{d\times k}$, LoRA~\cite{hu2022lora} learns an update of rank $r\ll\min(d,k)$:
@@ -237,17 +237,17 @@ For a frozen pre-trained weight $W_0\in\mathbb{R}^{d\times k}$, LoRA~\cite{hu202
   h = W_0x + \Delta Wx = W_0x + \frac{\alpha}{r}BAx,\qquad B\in\mathbb{R}^{d\times r},\ A\in\mathbb{R}^{r\times k},
   \label{eq:lora}
 \end{equation}
-$A$ starts with random values and $B$ starts at zero, so before any training the adapted layer behaves exactly like the original one. Each adapted matrix needs $r(d+k)$ new parameters instead of $dk$. For TinyLlama, which has hidden size 2048, 22 layers and 256-dimensional key and value projections, adapters of rank $r=16$ on the four attention projections add
+$B$ is initialised to zero and $A$ to random values, so at the start the adapted layer gives exactly the same output as the original. Each adapted matrix costs $r(d+k)$ new parameters rather than $dk$. TinyLlama has hidden size 2048, 22 layers and 256-dimensional key and value projections, so rank-16 adapters on the four attention projections add
 \[
 22\times16\times\big[(2048+2048)+2(2048+256)+(2048+2048)\big] = 4{,}505{,}600
 \]
 trainable parameters, about 0.41\% of the 1.1B total. With $r=32$ on the attention \emph{and} MLP projections (intermediate size 5632), the count rises to about 25.2M (2.3\%).
 
 \subsection{4-bit NormalFloat quantisation}
-In QLoRA~\cite{dettmers2023qlora} the frozen weights are kept in the 4-bit NormalFloat (NF4) format. The weights are cut into blocks of 64; each block is divided by its largest absolute value, and every number is rounded to one of 16 levels chosen so that normally distributed values are covered evenly. Double quantisation applies the same trick to the per-block scale factors and saves roughly another 0.37 bits per weight. When a layer runs, its weights are expanded back to the compute type, which is FP16 for us because the T4 has no BF16 support. Only the LoRA matrices receive gradients, and they stay in higher precision.
+QLoRA~\cite{dettmers2023qlora} stores the frozen weights in 4-bit NormalFloat (NF4). The weights are grouped in blocks of 64, each block is scaled by its largest absolute value, and every value is snapped to one of 16 levels placed so that a normal distribution is covered evenly. Double quantisation does the same to the per-block scales, saving about 0.37 more bits per weight. During a forward pass the weights of each layer are expanded to the compute type, FP16 in our case because the T4 cannot do BF16. Gradients flow only into the LoRA matrices, which are kept at higher precision.
 
 \subsection{Memory budget}
-Table~\ref{tab:memory} shows roughly how much GPU memory each option would need for DPO training of the policy. It makes clear why we needed NF4, LoRA and a paged 8-bit optimiser together to stay inside 16\,GB.
+Table~\ref{tab:memory} gives a rough estimate of the GPU memory each option needs for DPO training of the policy. It shows that only NF4, LoRA and a paged 8-bit optimiser used together keep us below 16\,GB.
 
 \begin{table}[!htbp]
 \centering
@@ -271,9 +271,9 @@ LoRA ($r$=16), FP16 base & 2.2 GB & $<$0.1 GB & $\approx$ 2.3 GB\\
 \label{sec:models}
 
 \subsection{Reward model: DeBERTa-v3-base with a scalar head}
-The reward model (Figure~\ref{fig:rmarch}) reads the prompt and the response as a pair of sentences, [CLS] prompt [SEP] response [SEP], cut to 512 tokens. DeBERTa-v3-base has 12 layers with hidden size 768 and 12 attention heads, and about 184M parameters in total, a large share of them in its 128K-entry word table. The output vector at the [CLS] position goes through a pooler (a $768\to768$ dense layer) and then a linear layer $768\to1$ whose output is the reward.
+The reward model (Figure~\ref{fig:rmarch}) takes the prompt and the answer as a sentence pair, [CLS] prompt [SEP] response [SEP], truncated to 512 tokens. DeBERTa-v3-base has 12 layers, hidden size 768 and 12 attention heads, about 184M parameters in all, many of them in its 128K-word embedding table. The [CLS] output passes through a pooler (a $768\to768$ dense layer) and a final $768\to1$ linear layer, and that single number is the reward.
 
-We add LoRA adapters to the query, key and value projections in every layer. PEFT trains the final classifier automatically for this task type, and we also list the pooler under \texttt{modules\_to\_save}. Without that line the pooler was never saved, which broke reloading; Section~\ref{sec:impl-fixes} tells the full story.
+LoRA adapters go on the query, key and value projections of every layer. For this task type PEFT trains the final classifier by itself, and we add the pooler to \texttt{modules\_to\_save} as well. Leaving that out meant the pooler was never written to disk, and reloading the model failed; Section~\ref{sec:impl-fixes} has the details.
 
 \begin{figure}[H]
 \centering
@@ -296,7 +296,7 @@ We add LoRA adapters to the query, key and value projections in every layer. PEF
 \end{figure}
 
 \subsection{Policy model: TinyLlama-1.1B-Chat with LoRA}
-The policy (Figure~\ref{fig:polarch}) follows the Llama design: 22 decoder layers of width 2048, 32 query heads sharing 4 key/value heads, SwiGLU feed-forward blocks of width 5632, rotary position encoding and a 32K-token vocabulary. Its weights stay frozen in NF4. LoRA adapters sit on the $q$, $k$, $v$ and $o$ projections, and configuration B adds them to the gate, up and down projections of the feed-forward blocks as well. Every prompt is placed inside the model's chat template (\texttt{<|user|>} \ldots \texttt{<|assistant|>}) both in training and when generating.
+The policy (Figure~\ref{fig:polarch}) is a Llama-style decoder: 22 layers of width 2048, 32 query heads sharing 4 key/value heads, SwiGLU feed-forward blocks of width 5632, rotary position encoding and a 32K-token vocabulary. Its weights stay frozen in NF4. LoRA adapters are attached to the $q$, $k$, $v$ and $o$ projections, and in configuration B also to the gate, up and down projections of the feed-forward blocks. Prompts are always wrapped in the model's chat template (\texttt{<|user|>} \ldots \texttt{<|assistant|>}), during training and during generation.
 
 \begin{figure}[H]
 \centering
@@ -323,7 +323,7 @@ The policy (Figure~\ref{fig:polarch}) follows the Llama design: 22 decoder layer
 \end{figure}
 
 \subsection{PPO vs.\ DPO training loops}
-Figure~\ref{fig:ppovsdpo} compares what has to sit in GPU memory under PPO and under DPO. This difference was the deciding factor for us.
+Figure~\ref{fig:ppovsdpo} sets the GPU memory needed by PPO beside that needed by DPO. For us this was the deciding factor.
 
 \begin{figure}[H]
 \centering
@@ -357,10 +357,10 @@ Figure~\ref{fig:ppovsdpo} compares what has to sit in GPU memory under PPO and u
 \label{sec:datasets}
 
 \subsection{Anthropic HH-RLHF (helpful-base)}
-Every HH-RLHF row has a \texttt{chosen} and a \texttt{rejected} field. Each is a whole conversation written as \verb|\n\nHuman: ... \n\nAssistant: ...|, sometimes with several turns, and the two copies are identical except for the last assistant reply. The helpful-base training file contains 43,835 rows.
+Each HH-RLHF row has two fields, \texttt{chosen} and \texttt{rejected}. Both hold the full conversation in the form \verb|\n\nHuman: ... \n\nAssistant: ...|, possibly over several turns, and they differ only in the final assistant reply. The helpful-base training file has 43,835 rows.
 
 \subsection{LMSYS Chatbot Arena (Kaggle \texttt{train.csv})}
-The LMSYS file has 57,477 rows. Each row stores an \texttt{id}, the two model names (\texttt{model\_a}, \texttt{model\_b}), the conversation as JSON lists (\texttt{prompt}, \texttt{response\_a}, \texttt{response\_b}, one entry per turn) and three columns of 0/1 flags: \texttt{winner\_model\_a}, \texttt{winner\_model\_b} and \texttt{winner\_tie}. 17,761 rows (30.9\%) are ties.
+The LMSYS file holds 57,477 rows. For each one it records an \texttt{id}, the names of the two models (\texttt{model\_a}, \texttt{model\_b}), the conversation as JSON lists with one entry per turn (\texttt{prompt}, \texttt{response\_a}, \texttt{response\_b}), and three 0/1 columns, \texttt{winner\_model\_a}, \texttt{winner\_model\_b} and \texttt{winner\_tie}. Ties make up 17,761 rows (30.9\%).
 
 \subsection{Common schema and source statistics}
 Both datasets are converted to the schema
@@ -390,7 +390,7 @@ Sampled -- configuration B (HH-weighted) & 6,000 & 2,000\\
 \end{table}
 
 \subsection{Splitting strategy}
-We split each source on its own, 87.5\% for training, 6.25\% for validation and 6.25\% for testing, and then join and shuffle the pieces. This keeps the source mix the same in every split and makes sure no row appears in two splits. An early version of our code did take validation and test rows from overlapping slices, and we corrected it. Table~\ref{tab:splits} lists the sizes.
+Each source is split separately into 87.5\% train, 6.25\% validation and 6.25\% test, and the pieces are then merged and shuffled. That way every split has the same source mix and no row can land in two splits. Our first version actually drew validation and test rows from overlapping slices; we caught and fixed this. The split sizes are in Table~\ref{tab:splits}.
 
 \begin{table}[!htbp]
 \centering
@@ -502,4 +502,4 @@ Evaluation & RM as proxy judge & Human / GPT-4 & Feasible on free tier; circular
 \end{table}
 
 \section{Summary}
-To sum up, we described the four stages, the data flow at three levels and the order of a run. We derived the reward-model loss from the Bradley--Terry model and the DPO loss from the KL-limited RLHF objective, worked out how much LoRA and NF4 save, and described both models, the data, the splits, the measures and the tools. Chapter~\ref{ch:impl} turns this design into code.
+In short, we set out the four stages, the data flow and run order, derived both training losses, estimated what LoRA and NF4 save, and described the models, data, metrics and tools. Chapter~\ref{ch:impl} turns this design into code.
